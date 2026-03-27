@@ -49,11 +49,11 @@ public final class ExecutorUtil {
         return BACK_EXECUTOR;
     }
 
-    public void executeBack(Runnable runnable) {
+    public static void executeBack(Runnable runnable) {
         getBackExecutor().execute(runnable);
     }
 
-    public void executeSingle(Runnable runnable) {
+    public static void executeSingle(Runnable runnable) {
         getSingleMessageExecutor().execute(runnable);
     }
 }
