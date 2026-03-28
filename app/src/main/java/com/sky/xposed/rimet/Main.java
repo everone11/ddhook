@@ -54,8 +54,7 @@ public class Main extends XposedModule {
 
     private static final String TAG = "ddhook";
 
-    public Main(@NonNull XposedInterface base, @NonNull XposedModuleInterface.ModuleLoadedParam param) {
-        super(base, param);
+    public Main() {
     }
 
     /**
