@@ -17,11 +17,13 @@
 package com.sky.xposed.rimet.plugin;
 
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
 import android.util.SparseArray;
 
+import com.sky.xposed.rimet.BuildConfig;
 import com.sky.xposed.rimet.Constant;
 import com.sky.xposed.rimet.data.ConfigManager;
 import com.sky.xposed.rimet.plugin.dingding.DingDingHandler;
@@ -128,12 +130,33 @@ public class PluginManager implements XPluginManager {
     @Override
     public XConfigManager getConfigManager() {
         if (mConfigManager == null) {
+            // Read settings from the module's own SharedPreferences (written by the UI Activity).
+            // We use createPackageContext so the hook running in DingTalk's process can access
+            // the module's data directory — LSPosed adjusts SELinux labels to allow this.
+            Context configContext = getModuleContext();
             mConfigManager = new ConfigManager
                     .Build(this)
+                    .setContext(configContext)
                     .setConfigName(Constant.Name.RIMET)
                     .build();
         }
         return mConfigManager;
+    }
+
+    /**
+     * Returns a Context pointing at the module's own package data directory so that
+     * SharedPreferences written by the UI Activity can be read here in the hooked process.
+     * Falls back to the hooked-app context on failure.
+     */
+    private Context getModuleContext() {
+        try {
+            return mContext.createPackageContext(
+                    BuildConfig.APPLICATION_ID,
+                    Context.CONTEXT_IGNORE_SECURITY);
+        } catch (PackageManager.NameNotFoundException e) {
+            Log.w(TAG, "Module package context not found, falling back to hooked context", e);
+            return mContext;
+        }
     }
 
     /**

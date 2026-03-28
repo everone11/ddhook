@@ -1,4 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">钉钉助手</string>
+
+    <!-- Main activity labels -->
+    <string name="label_plugin_version">插件版本</string>
+    <string name="label_dingtalk_version">钉钉版本</string>
+    <string name="label_support_status">支持状态</string>
+    <string name="label_supported">支持当前版本</string>
+    <string name="label_unsupported">不支持当前版本</string>
+    <string name="label_supported_versions">支持的版本: %s</string>
+    <string name="label_unknown">未知</string>
+
+    <!-- Feature switches -->
+    <string name="feature_enable_lucky">自动接收红包</string>
+    <string name="feature_enable_lucky_desc">开启时自动接收红包</string>
+    <string name="feature_lucky_delayed">红包延迟时间 (秒)</string>
+    <string name="feature_lucky_delayed_hint">延迟秒数 (0表示立即)</string>
+    <string name="feature_enable_fast_lucky">快速打开红包</string>
+    <string name="feature_enable_fast_lucky_desc">开启时快速打开红包</string>
+    <string name="feature_enable_recall">消息防撤回</string>
+    <string name="feature_enable_recall_desc">开启时消息不会被撤回</string>
+
+    <!-- Section headers -->
+    <string name="section_info">模块信息</string>
+    <string name="section_settings">功能设置</string>
+
+    <!-- About -->
+    <string name="about_title">关于</string>
+    <string name="about_message">钉钉助手 (ddhook)\n\n基于 libxposed API 的钉钉功能增强模块\n\n源码: github.com/everone11/ddhook</string>
+    <string name="ok">确定</string>
 </resources>
