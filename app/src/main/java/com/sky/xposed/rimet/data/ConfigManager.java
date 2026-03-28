@@ -36,7 +36,7 @@ public class ConfigManager implements XConfigManager {
     private Map<String, XConfigManager> mManagerMap = new HashMap<>();
 
     private ConfigManager(Build build) {
-        mContext = build.mXPluginManager.getContext();
+        mContext = build.mContext != null ? build.mContext : build.mXPluginManager.getContext();
         mSimplePreferences = new SimplePreferences(mContext, build.mName);
     }
 
@@ -163,10 +163,16 @@ public class ConfigManager implements XConfigManager {
     public static class Build {
 
         private XPluginManager mXPluginManager;
+        private Context mContext;
         private String mName;
 
         public Build(XPluginManager xPluginManager) {
             mXPluginManager = xPluginManager;
+        }
+
+        public Build setContext(Context context) {
+            mContext = context;
+            return this;
         }
 
         public Build setConfigName(String name) {

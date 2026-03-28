@@ -54,4 +54,7 @@ dependencies {
 
     compileOnly 'androidx.annotation:annotation:1.6.0'
 
+    // UI: AppCompat for MainActivity (AppCompatActivity, SwitchCompat, AlertDialog, CardView)
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.cardview:cardview:1.0.0'
 }

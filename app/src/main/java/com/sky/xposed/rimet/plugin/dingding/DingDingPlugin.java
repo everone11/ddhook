@@ -94,7 +94,15 @@ public class DingDingPlugin extends BasePlugin {
 
     @Override
     public void openSettings(Activity activity) {
-        // UI settings dialog can be added here when a UI library is available
+        android.content.Intent intent = new android.content.Intent();
+        intent.setClassName("com.sky.xposed.rimet",
+                "com.sky.xposed.rimet.ui.activity.MainActivity");
+        intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            activity.startActivity(intent);
+        } catch (Exception e) {
+            android.util.Log.e("DingDingPlugin", "Failed to open settings", e);
+        }
     }
 
     public interface Handler {
