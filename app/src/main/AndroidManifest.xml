@@ -40,6 +40,11 @@
             android:name="xposedscope"
             android:resource="@array/xposed_scope" />
 
+        <!-- Entry point for the libxposed modern API (replaces assets/xposed_init) -->
+        <meta-data
+            android:name="xposedmoduleentry"
+            android:value="com.sky.xposed.rimet.Main" />
+
     </application>
 
 </manifest>
