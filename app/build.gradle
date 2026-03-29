@@ -49,6 +49,10 @@ android {
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 
+    // 强制统一 Kotlin 版本以解决 CheckDuplicates 冲突
+    implementation platform('org.jetbrains.kotlin:kotlin-bom:1.8.0')
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib'
+
     // libxposed modern API (replaces de.robv.android.xposed:api:82)
     compileOnly 'io.github.libxposed:api:101.0.0'
 
