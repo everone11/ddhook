@@ -30,10 +30,10 @@
             android:name="xposeddescription"
             android:value="钉钉助手 (DingTalk Hook)" />
 
-        <!-- Lowered to 54 so that both modern and legacy LSPosed builds recognise this module -->
+        <!-- Updated to 101 to match LibXposed API version -->
         <meta-data
             android:name="xposedminversion"
-            android:value="54" />
+            android:value="101" />
 
         <!-- Hook scope: only inject into DingTalk -->
         <meta-data
