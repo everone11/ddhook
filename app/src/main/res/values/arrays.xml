@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Xposed scope: DingTalk and Alipay -->
+    <!-- Xposed scope: DingTalk only (Alipay is intentionally excluded) -->
     <string-array name="xposed_scope">
         <item>com.alibaba.android.rimet</item>
-        <item>com.eg.android.AlipayGphone</item>
     </string-array>
 </resources>
