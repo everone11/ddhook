@@ -85,7 +85,7 @@ public class PluginManager implements XPluginManager {
     @Override
     public void handleLoadPackage() {
 
-        if (mXPlugins.size() != 0 || !getVersionManager().isSupportVersion()) {
+        if (mXPlugins.size() != 0) {
             Log.d(TAG, "暂时不需要处理加载的包!");
             return;
         }
