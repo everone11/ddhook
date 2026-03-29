@@ -24,6 +24,23 @@
     <!-- Section headers -->
     <string name="section_info">模块信息</string>
     <string name="section_settings">功能设置</string>
+    <string name="section_virtual_location">虚拟位置设置</string>
+
+    <!-- Virtual location feature -->
+    <string name="feature_enable_virtual_location">启用虚拟位置</string>
+    <string name="feature_enable_virtual_location_desc">开启时替换应用获取的位置信息</string>
+    <string name="label_latitude">纬度 (Latitude)</string>
+    <string name="label_longitude">经度 (Longitude)</string>
+    <string name="label_wifi_ssid">WiFi 名称 (SSID)</string>
+    <string name="label_wifi_bssid">WiFi MAC (BSSID)</string>
+    <string name="label_cell_lac">基站区域码 (LAC)</string>
+    <string name="label_cell_cid">基站小区号 (CID)</string>
+    <string name="hint_latitude">例: 39.9042</string>
+    <string name="hint_longitude">例: 116.4074</string>
+    <string name="hint_wifi_ssid">例: MyWiFi</string>
+    <string name="hint_wifi_bssid">例: aa:bb:cc:dd:ee:ff</string>
+    <string name="hint_cell_lac">例: 1234</string>
+    <string name="hint_cell_cid">例: 56789</string>
 
     <!-- About -->
     <string name="about_title">关于</string>

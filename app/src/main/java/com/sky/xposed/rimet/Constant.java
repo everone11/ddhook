@@ -26,6 +26,11 @@ public interface Constant {
         String PACKAGE_NAME = "com.alibaba.android.rimet";
     }
 
+    interface Alipay {
+
+        String PACKAGE_NAME = "com.eg.android.AlipayGphone";
+    }
+
     interface Event {
 
         int CLICK = 0x01;
@@ -65,6 +70,20 @@ public interface Constant {
         int ENABLE_FAST_LUCKY = 0x000004;
 
         int ENABLE_RECALL = 0x000005;
+
+        int ENABLE_VIRTUAL_LOCATION = 0x000006;
+
+        int VIRTUAL_LATITUDE = 0x000007;
+
+        int VIRTUAL_LONGITUDE = 0x000008;
+
+        int VIRTUAL_WIFI_SSID = 0x000009;
+
+        int VIRTUAL_WIFI_BSSID = 0x00000A;
+
+        int VIRTUAL_CELL_LAC = 0x00000B;
+
+        int VIRTUAL_CELL_CID = 0x00000C;
     }
 
     interface Preference {

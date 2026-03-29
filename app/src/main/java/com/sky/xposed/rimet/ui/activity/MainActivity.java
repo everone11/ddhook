@@ -56,6 +56,14 @@ public class MainActivity extends AppCompatActivity {
     private SwitchCompat mSwEnableRecall;
     private EditText mEtLuckyDelayed;
 
+    private SwitchCompat mSwEnableVirtualLocation;
+    private EditText mEtLatitude;
+    private EditText mEtLongitude;
+    private EditText mEtWifiSsid;
+    private EditText mEtWifiBssid;
+    private EditText mEtCellLac;
+    private EditText mEtCellCid;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -69,6 +77,7 @@ public class MainActivity extends AppCompatActivity {
 
         initInfoSection();
         initSettingsSection();
+        initVirtualLocationSection();
     }
 
     @Override
@@ -152,6 +161,56 @@ public class MainActivity extends AppCompatActivity {
                         .apply();
             }
         });
+    }
+
+    private void initVirtualLocationSection() {
+        mSwEnableVirtualLocation = findViewById(R.id.sw_enable_virtual_location);
+        mEtLatitude = findViewById(R.id.et_latitude);
+        mEtLongitude = findViewById(R.id.et_longitude);
+        mEtWifiSsid = findViewById(R.id.et_wifi_ssid);
+        mEtWifiBssid = findViewById(R.id.et_wifi_bssid);
+        mEtCellLac = findViewById(R.id.et_cell_lac);
+        mEtCellCid = findViewById(R.id.et_cell_cid);
+
+        mSwEnableVirtualLocation.setChecked(mPreferences.getBoolean(
+                Integer.toString(Constant.XFlag.ENABLE_VIRTUAL_LOCATION), false));
+        mEtLatitude.setText(mPreferences.getString(
+                Integer.toString(Constant.XFlag.VIRTUAL_LATITUDE), ""));
+        mEtLongitude.setText(mPreferences.getString(
+                Integer.toString(Constant.XFlag.VIRTUAL_LONGITUDE), ""));
+        mEtWifiSsid.setText(mPreferences.getString(
+                Integer.toString(Constant.XFlag.VIRTUAL_WIFI_SSID), ""));
+        mEtWifiBssid.setText(mPreferences.getString(
+                Integer.toString(Constant.XFlag.VIRTUAL_WIFI_BSSID), ""));
+        mEtCellLac.setText(mPreferences.getString(
+                Integer.toString(Constant.XFlag.VIRTUAL_CELL_LAC), ""));
+        mEtCellCid.setText(mPreferences.getString(
+                Integer.toString(Constant.XFlag.VIRTUAL_CELL_CID), ""));
+
+        mSwEnableVirtualLocation.setOnCheckedChangeListener((btn, checked) ->
+                mPreferences.edit()
+                        .putBoolean(Integer.toString(Constant.XFlag.ENABLE_VIRTUAL_LOCATION), checked)
+                        .apply());
+
+        mEtLatitude.addTextChangedListener(newTextWatcher(Constant.XFlag.VIRTUAL_LATITUDE));
+        mEtLongitude.addTextChangedListener(newTextWatcher(Constant.XFlag.VIRTUAL_LONGITUDE));
+        mEtWifiSsid.addTextChangedListener(newTextWatcher(Constant.XFlag.VIRTUAL_WIFI_SSID));
+        mEtWifiBssid.addTextChangedListener(newTextWatcher(Constant.XFlag.VIRTUAL_WIFI_BSSID));
+        mEtCellLac.addTextChangedListener(newTextWatcher(Constant.XFlag.VIRTUAL_CELL_LAC));
+        mEtCellCid.addTextChangedListener(newTextWatcher(Constant.XFlag.VIRTUAL_CELL_CID));
+    }
+
+    private TextWatcher newTextWatcher(int flagKey) {
+        return new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                mPreferences.edit()
+                        .putString(Integer.toString(flagKey), s.toString())
+                        .apply();
+            }
+        };
     }
 
     private String getDingTalkVersionName() {

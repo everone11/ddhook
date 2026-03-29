@@ -28,6 +28,7 @@ import com.sky.xposed.rimet.plugin.PluginManager;
 import com.sky.xposed.rimet.plugin.interfaces.XConfig;
 import com.sky.xposed.rimet.plugin.interfaces.XPluginManager;
 import com.sky.xposed.rimet.plugin.interfaces.XVersionManager;
+import com.sky.xposed.rimet.plugin.system.SystemHookPlugin;
 
 import java.lang.reflect.Method;
 
@@ -67,18 +68,32 @@ public class Main extends XposedModule {
 
     /**
      * Called when a target package's classloader is ready (analogous to handleLoadPackage).
-     * We filter to DingTalk's package and then hook the Application.onCreate to get a Context.
+     * We filter to DingTalk's and Alipay's packages, then hook the Application.onCreate to
+     * get a Context for DingTalk-specific plugins. System-level hooks (Location, WiFi, Cell)
+     * are installed immediately for both packages.
      */
     @Override
     public void onPackageReady(@NonNull XposedModuleInterface.PackageReadyParam lpParam) {
 
-        // Only hook DingTalk
-        if (!Constant.Rimet.PACKAGE_NAME.equals(lpParam.getPackageName())) return;
+        String pkg = lpParam.getPackageName();
+        boolean isDingTalk = Constant.Rimet.PACKAGE_NAME.equals(pkg);
+        boolean isAlipay = Constant.Alipay.PACKAGE_NAME.equals(pkg);
+
+        // Only handle DingTalk and Alipay
+        if (!isDingTalk && !isAlipay) return;
 
         // Only process the first package (primary process)
         if (!lpParam.isFirstPackage()) return;
 
-        log(Log.INFO, TAG, "DingTalk package ready — setting up hooks");
+        log(Log.INFO, TAG, pkg + " package ready — setting up hooks");
+
+        // Install system-level hooks (Location / WiFi / Cell) for both DingTalk and Alipay.
+        // These hooks read config lazily from SharedPreferences when invoked at runtime,
+        // so no app Context is needed at registration time.
+        new SystemHookPlugin(this).onHandleLoadPackage();
+
+        // Alipay only needs system hooks — nothing more to do here.
+        if (!isDingTalk) return;
 
         ClassLoader classLoader = lpParam.getClassLoader();
 
@@ -87,7 +102,7 @@ public class Main extends XposedModule {
         // because direct ActivityThread access requires hidden-API stubs.
         Context systemContext = getSystemContext();
         if (systemContext == null) {
-            log(Log.ERROR, TAG, "Could not obtain system context — aborting hook setup");
+            log(Log.ERROR, TAG, "Could not obtain system context — aborting DingTalk hook setup");
             return;
         }
 

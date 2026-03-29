@@ -30,10 +30,10 @@
             android:name="xposeddescription"
             android:value="钉钉助手 (DingTalk Hook)" />
 
-        <!-- Must be 101 to match io.github.libxposed:api:101.0.0 -->
+        <!-- Set to 54 so all versions of LSPosed/Xposed can identify this module -->
         <meta-data
             android:name="xposedminversion"
-            android:value="101" />
+            android:value="54" />
 
         <!-- Hook scope: only inject into DingTalk -->
         <meta-data
