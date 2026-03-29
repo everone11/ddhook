@@ -56,6 +56,7 @@ public class Main extends XposedModule {
     private static final String TAG = "ddhook";
 
     public Main() {
+        super();
     }
 
     /**
@@ -78,7 +79,7 @@ public class Main extends XposedModule {
         // Only process the first package (primary process)
         if (!lpParam.isFirstPackage()) return;
 
-        // Always apply system-level hooks for every in-scope package (DingTalk, Alipay, etc.)
+        // Apply system-level hooks (Location/WiFi/Cell) for every in-scope package
         SystemHookPlugin.setup(this);
 
         // DingTalk-specific hooks
