@@ -24,6 +24,19 @@
     <!-- Section headers -->
     <string name="section_info">模块信息</string>
     <string name="section_settings">功能设置</string>
+    <string name="section_location">虚拟定位设置</string>
+
+    <!-- Location feature -->
+    <string name="feature_enable_location">启用虚拟定位</string>
+    <string name="feature_enable_location_desc">开启后将修改位置/WiFi/基站信息</string>
+    <string name="feature_latitude">纬度 (Latitude)</string>
+    <string name="feature_latitude_hint">例如: 31.2304</string>
+    <string name="feature_longitude">经度 (Longitude)</string>
+    <string name="feature_longitude_hint">例如: 121.4737</string>
+    <string name="feature_wifi_ssid">WiFi 名称 (SSID)</string>
+    <string name="feature_wifi_ssid_hint">例如: MyWiFi</string>
+    <string name="feature_cell_id">基站 ID (Cell ID)</string>
+    <string name="feature_cell_id_hint">例如: 12345</string>
 
     <!-- About -->
     <string name="about_title">关于</string>

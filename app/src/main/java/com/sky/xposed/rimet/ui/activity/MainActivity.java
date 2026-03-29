@@ -56,6 +56,12 @@ public class MainActivity extends AppCompatActivity {
     private SwitchCompat mSwEnableRecall;
     private EditText mEtLuckyDelayed;
 
+    private SwitchCompat mSwEnableLocation;
+    private EditText mEtLatitude;
+    private EditText mEtLongitude;
+    private EditText mEtWifiSsid;
+    private EditText mEtCellId;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -69,6 +75,7 @@ public class MainActivity extends AppCompatActivity {
 
         initInfoSection();
         initSettingsSection();
+        initLocationSection();
     }
 
     @Override
@@ -149,6 +156,76 @@ public class MainActivity extends AppCompatActivity {
             public void afterTextChanged(Editable s) {
                 mPreferences.edit()
                         .putString(Integer.toString(Constant.XFlag.LUCKY_DELAYED), s.toString())
+                        .apply();
+            }
+        });
+    }
+
+    private void initLocationSection() {
+        mSwEnableLocation = findViewById(R.id.sw_enable_location);
+        mEtLatitude = findViewById(R.id.et_latitude);
+        mEtLongitude = findViewById(R.id.et_longitude);
+        mEtWifiSsid = findViewById(R.id.et_wifi_ssid);
+        mEtCellId = findViewById(R.id.et_cell_id);
+
+        // Load saved values
+        mSwEnableLocation.setChecked(mPreferences.getBoolean(
+                Integer.toString(Constant.XFlag.ENABLE_LOCATION), false));
+        mEtLatitude.setText(mPreferences.getString(
+                Integer.toString(Constant.XFlag.LATITUDE), ""));
+        mEtLongitude.setText(mPreferences.getString(
+                Integer.toString(Constant.XFlag.LONGITUDE), ""));
+        mEtWifiSsid.setText(mPreferences.getString(
+                Integer.toString(Constant.XFlag.WIFI_SSID), ""));
+        mEtCellId.setText(mPreferences.getString(
+                Integer.toString(Constant.XFlag.CELL_ID), ""));
+
+        // Save on change
+        mSwEnableLocation.setOnCheckedChangeListener((btn, checked) ->
+                mPreferences.edit()
+                        .putBoolean(Integer.toString(Constant.XFlag.ENABLE_LOCATION), checked)
+                        .apply());
+
+        mEtLatitude.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                mPreferences.edit()
+                        .putString(Integer.toString(Constant.XFlag.LATITUDE), s.toString())
+                        .apply();
+            }
+        });
+
+        mEtLongitude.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                mPreferences.edit()
+                        .putString(Integer.toString(Constant.XFlag.LONGITUDE), s.toString())
+                        .apply();
+            }
+        });
+
+        mEtWifiSsid.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                mPreferences.edit()
+                        .putString(Integer.toString(Constant.XFlag.WIFI_SSID), s.toString())
+                        .apply();
+            }
+        });
+
+        mEtCellId.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                mPreferences.edit()
+                        .putString(Integer.toString(Constant.XFlag.CELL_ID), s.toString())
                         .apply();
             }
         });

@@ -25,6 +25,7 @@ import androidx.annotation.NonNull;
 import com.sky.xposed.rimet.data.M;
 import com.sky.xposed.rimet.data.VersionManager;
 import com.sky.xposed.rimet.plugin.PluginManager;
+import com.sky.xposed.rimet.plugin.system.SystemHookPlugin;
 import com.sky.xposed.rimet.plugin.interfaces.XConfig;
 import com.sky.xposed.rimet.plugin.interfaces.XPluginManager;
 import com.sky.xposed.rimet.plugin.interfaces.XVersionManager;
@@ -67,39 +68,43 @@ public class Main extends XposedModule {
 
     /**
      * Called when a target package's classloader is ready (analogous to handleLoadPackage).
-     * We filter to DingTalk's package and then hook the Application.onCreate to get a Context.
+     * System-level hooks (Location/WiFi/Cell) are applied for every in-scope package.
+     * DingTalk-specific hooks are applied only when the DingTalk package is ready and a
+     * matching version config is available.
      */
     @Override
     public void onPackageReady(@NonNull XposedModuleInterface.PackageReadyParam lpParam) {
 
-        // Only hook DingTalk
-        if (!Constant.Rimet.PACKAGE_NAME.equals(lpParam.getPackageName())) return;
-
         // Only process the first package (primary process)
         if (!lpParam.isFirstPackage()) return;
+
+        // Always apply system-level hooks for every in-scope package (DingTalk, Alipay, etc.)
+        SystemHookPlugin.setup(this);
+
+        // DingTalk-specific hooks
+        if (!Constant.Rimet.PACKAGE_NAME.equals(lpParam.getPackageName())) return;
 
         log(Log.INFO, TAG, "DingTalk package ready — setting up hooks");
 
         ClassLoader classLoader = lpParam.getClassLoader();
 
         // Obtain a Context from the system to check DingTalk's installed version.
-        // We use ActivityThread.currentActivityThread().getSystemContext() via reflection
-        // because direct ActivityThread access requires hidden-API stubs.
         Context systemContext = getSystemContext();
         if (systemContext == null) {
-            log(Log.ERROR, TAG, "Could not obtain system context — aborting hook setup");
+            log(Log.ERROR, TAG, "Could not obtain system context — aborting DingTalk hook setup");
             return;
         }
 
         XVersionManager versionManager = new VersionManager.Build(systemContext).build();
 
-        if (!versionManager.isSupportVersion()) {
+        XConfig config = versionManager.getSupportConfig();
+
+        if (config == null) {
             log(Log.WARN, TAG, "Unsupported DingTalk version: " + versionManager.getVersionName()
-                    + " (supported: " + versionManager.getSupportVersion() + ")");
+                    + " (supported: " + versionManager.getSupportVersion()
+                    + ") — skipping DingTalk-specific hooks");
             return;
         }
-
-        XConfig config = versionManager.getSupportConfig();
 
         // The DDApplication class is version-specific; look it up from the version config.
         String ddApplicationClassName = config.get(M.classz.class_dingtalkbase_multidexsupport_DDApplication);
