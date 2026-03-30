@@ -46,6 +46,8 @@ public class VersionManager implements XVersionManager {
     static {
         // DingTalk version configurations
         CONFIG_MAP.put("4.6.17", RimetConfig4617.class);
+        // 7.5.0 uses the same config as 4.6.17 as an initial compatibility mapping
+        CONFIG_MAP.put("7.5.0", RimetConfig4617.class);
     }
 
     private XConfig mVersionConfig;
