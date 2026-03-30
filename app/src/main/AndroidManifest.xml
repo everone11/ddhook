@@ -28,26 +28,26 @@
 
         <!-- libxposed module declarations (replaces legacy assets/xposed_init) -->
         <meta-data
-            android:name="xposedmodule"
+            android:name="libxposedmodule"
             android:value="true" />
 
         <meta-data
-            android:name="xposeddescription"
+            android:name="libxposeddescription"
             android:value="DingTalk Hook Helper" />
 
         <!-- Updated to 101 to match LibXposed API version -->
         <meta-data
-            android:name="xposedminversion"
+            android:name="libxposedminversion"
             android:value="101" />
 
         <!-- Hook scope: only inject into DingTalk -->
         <meta-data
-            android:name="xposedscope"
+            android:name="libxposedscope"
             android:resource="@array/xposed_scope" />
 
         <!-- Entry point for the libxposed modern API (replaces assets/xposed_init) -->
         <meta-data
-            android:name="xposedmoduleentry"
+            android:name="libxposedmoduleentry"
             android:value="com.sky.xposed.rimet.Main" />
 
     </application>
