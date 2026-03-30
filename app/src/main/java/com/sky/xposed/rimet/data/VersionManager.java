@@ -46,6 +46,8 @@ public class VersionManager implements XVersionManager {
     static {
         // DingTalk version configurations
         CONFIG_MAP.put("4.6.17", RimetConfig4617.class);
+        // 7.5.0 maps to the 4.6.17 config as a baseline until a dedicated config is added
+        CONFIG_MAP.put("7.5.0", RimetConfig4617.class);
     }
 
     private XConfig mVersionConfig;
@@ -68,11 +70,17 @@ public class VersionManager implements XVersionManager {
     }
 
     /**
-     * 获取当前版本名
+     * 获取当前版本名 (strips a leading "v"/"V" if present for consistent map lookup)
      */
     @Override
     public String getVersionName() {
-        return mVersionInfo != null ? mVersionInfo.versionName : "";
+        if (mVersionInfo == null) return "";
+        String name = mVersionInfo.versionName;
+        if (name == null) return "";
+        if (name.length() >= 1 && (name.charAt(0) == 'v' || name.charAt(0) == 'V')) {
+            name = name.substring(1);
+        }
+        return name;
     }
 
     /**
