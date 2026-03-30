@@ -35,6 +35,12 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
+    packagingOptions {
+        resources {
+            merges += "META-INF/xposed/*"
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled true

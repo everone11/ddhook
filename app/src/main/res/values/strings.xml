@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">钉钉助手</string>
+    <string name="app_description">DingTalk Hook Helper</string>
 
     <!-- Main activity labels -->
     <string name="label_plugin_version">插件版本</string>
