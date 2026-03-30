@@ -61,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
     private EditText mEtLongitude;
     private EditText mEtWifiSsid;
     private EditText mEtCellId;
+    private EditText mEtWifiMac;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -167,6 +168,7 @@ public class MainActivity extends AppCompatActivity {
         mEtLongitude = findViewById(R.id.et_longitude);
         mEtWifiSsid = findViewById(R.id.et_wifi_ssid);
         mEtCellId = findViewById(R.id.et_cell_id);
+        mEtWifiMac = findViewById(R.id.et_wifi_mac);
 
         // Load saved values
         mSwEnableLocation.setChecked(mPreferences.getBoolean(
@@ -179,6 +181,8 @@ public class MainActivity extends AppCompatActivity {
                 Integer.toString(Constant.XFlag.WIFI_SSID), ""));
         mEtCellId.setText(mPreferences.getString(
                 Integer.toString(Constant.XFlag.CELL_ID), ""));
+        mEtWifiMac.setText(mPreferences.getString(
+                Integer.toString(Constant.XFlag.WIFI_MAC), ""));
 
         // Save on change
         mSwEnableLocation.setOnCheckedChangeListener((btn, checked) ->
@@ -226,6 +230,17 @@ public class MainActivity extends AppCompatActivity {
             public void afterTextChanged(Editable s) {
                 mPreferences.edit()
                         .putString(Integer.toString(Constant.XFlag.CELL_ID), s.toString())
+                        .apply();
+            }
+        });
+
+        mEtWifiMac.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                mPreferences.edit()
+                        .putString(Integer.toString(Constant.XFlag.WIFI_MAC), s.toString())
                         .apply();
             }
         });

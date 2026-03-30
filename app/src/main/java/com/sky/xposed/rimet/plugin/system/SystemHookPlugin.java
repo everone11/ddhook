@@ -154,6 +154,17 @@ public class SystemHookPlugin {
                 return bssid;
             });
 
+            Method getMacAddress = cls.getMethod("getMacAddress");
+            xi.hook(getMacAddress).intercept(chain -> {
+                SharedPreferences prefs = getPrefs();
+                if (!isEnabled(prefs)) return chain.proceed();
+                String mac = getString(prefs, Constant.XFlag.WIFI_MAC);
+                if (mac.isEmpty()) return chain.proceed();
+                // Validate MAC address format: XX:XX:XX:XX:XX:XX
+                if (!mac.matches("^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")) return chain.proceed();
+                return mac;
+            });
+
         } catch (Exception e) {
             Log.w(TAG, "hookWifiInfo failed: " + e.getMessage());
         }
