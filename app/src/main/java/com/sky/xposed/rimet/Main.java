@@ -35,6 +35,8 @@ import java.lang.reflect.Method;
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface;
+import io.github.libxposed.service.XposedService;
+import io.github.libxposed.service.XposedServiceHelper;
 
 /**
  * Xposed module entry point for ddhook (DingTalk hook).
@@ -55,16 +57,49 @@ public class Main extends XposedModule {
 
     private static final String TAG = "ddhook";
 
+    /**
+     * The XposedService delivered by the framework through XposedProvider.
+     * Used by hook code to call getRemotePreferences() as a SELinux-safe alternative
+     * to createPackageContext() on Android 11+.
+     */
+    private static volatile XposedService sXposedService;
+
+    /** Returns the XposedService, or {@code null} if not yet available. */
+    public static XposedService getXposedService() {
+        return sXposedService;
+    }
+
     public Main() {
         super();
     }
 
     /**
      * Called when our module itself is loaded (process-level init).
+     * Register the XposedServiceHelper listener here so the service binder is captured
+     * as soon as the framework delivers it (via XposedProvider.call) into this process.
      */
     @Override
     public void onModuleLoaded(@NonNull XposedModuleInterface.ModuleLoadedParam param) {
         log(Log.INFO, TAG, "ddhook module loaded in process: " + param.getProcessName());
+
+        // Register listener to receive the XposedService binder delivered by the framework.
+        // This binder allows getRemotePreferences() — a SELinux-safe way to read module
+        // SharedPreferences from within the hooked app's process (Android 11+ / LSPosed).
+        XposedServiceHelper.registerListener(new XposedServiceHelper.OnServiceListener() {
+            @Override
+            public void onServiceBind(@NonNull XposedService service) {
+                sXposedService = service;
+                log(Log.INFO, TAG, "XposedService bound — remote preferences now available");
+            }
+
+            @Override
+            public void onServiceDied(@NonNull XposedService service) {
+                if (sXposedService == service) {
+                    sXposedService = null;
+                }
+                log(Log.WARN, TAG, "XposedService died — falling back to createPackageContext");
+            }
+        });
     }
 
     /**

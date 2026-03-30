@@ -37,7 +37,14 @@ public class ConfigManager implements XConfigManager {
 
     private ConfigManager(Build build) {
         mContext = build.mContext != null ? build.mContext : build.mXPluginManager.getContext();
-        mSimplePreferences = new SimplePreferences(mContext, build.mName);
+        if (build.mSharedPreferences != null) {
+            mSimplePreferences = new SimplePreferences(build.mSharedPreferences);
+        } else if (build.mName != null) {
+            mSimplePreferences = new SimplePreferences(mContext, build.mName);
+        } else {
+            throw new IllegalArgumentException(
+                    "ConfigManager.Build requires either setSharedPreferences or setConfigName");
+        }
     }
 
     @Override
@@ -105,6 +112,11 @@ public class ConfigManager implements XConfigManager {
 
         private SharedPreferences mSharedPreferences;
 
+        /** Construct from a pre-existing SharedPreferences (e.g. from XposedService). */
+        public SimplePreferences(SharedPreferences prefs) {
+            mSharedPreferences = prefs;
+        }
+
         public SimplePreferences(Context context, String name) {
             mSharedPreferences = context.getSharedPreferences(name, Context.MODE_PRIVATE);
         }
@@ -165,6 +177,7 @@ public class ConfigManager implements XConfigManager {
         private XPluginManager mXPluginManager;
         private Context mContext;
         private String mName;
+        private SharedPreferences mSharedPreferences;
 
         public Build(XPluginManager xPluginManager) {
             mXPluginManager = xPluginManager;
@@ -177,6 +190,15 @@ public class ConfigManager implements XConfigManager {
 
         public Build setConfigName(String name) {
             mName = name;
+            return this;
+        }
+
+        /**
+         * Provide a SharedPreferences instance directly.
+         * When set, it takes priority over setContext()+setConfigName() for the primary config.
+         */
+        public Build setSharedPreferences(SharedPreferences prefs) {
+            mSharedPreferences = prefs;
             return this;
         }
 

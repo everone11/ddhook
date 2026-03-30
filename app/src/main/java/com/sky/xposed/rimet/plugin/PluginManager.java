@@ -17,6 +17,7 @@
 package com.sky.xposed.rimet.plugin;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Message;
@@ -25,6 +26,7 @@ import android.util.SparseArray;
 
 import com.sky.xposed.rimet.BuildConfig;
 import com.sky.xposed.rimet.Constant;
+import com.sky.xposed.rimet.Main;
 import com.sky.xposed.rimet.data.ConfigManager;
 import com.sky.xposed.rimet.plugin.dingding.DingDingHandler;
 import com.sky.xposed.rimet.plugin.dingding.DingDingPlugin;
@@ -40,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 
 import io.github.libxposed.api.XposedInterface;
+import io.github.libxposed.service.XposedService;
 
 /**
  * Created by sky on 2018/9/24.
@@ -130,15 +133,34 @@ public class PluginManager implements XPluginManager {
     @Override
     public XConfigManager getConfigManager() {
         if (mConfigManager == null) {
-            // Read settings from the module's own SharedPreferences (written by the UI Activity).
-            // We use createPackageContext so the hook running in DingTalk's process can access
-            // the module's data directory — LSPosed adjusts SELinux labels to allow this.
-            Context configContext = getModuleContext();
-            mConfigManager = new ConfigManager
-                    .Build(this)
-                    .setContext(configContext)
-                    .setConfigName(Constant.Name.RIMET)
-                    .build();
+            ConfigManager.Build builder = new ConfigManager.Build(this)
+                    .setConfigName(Constant.Name.RIMET);
+
+            // Prefer XposedService.getRemotePreferences() on Android 11+ / LSPosed:
+            // createPackageContext is blocked by SELinux in sandboxed app processes,
+            // while the framework's binder-delivered service bypasses that restriction.
+            // Capture in a local variable to avoid a race with onServiceDied().
+            XposedService service = Main.getXposedService();
+            boolean usedService = false;
+            if (service != null) {
+                try {
+                    SharedPreferences servicePrefs =
+                            service.getRemotePreferences(Constant.Name.RIMET);
+                    builder.setSharedPreferences(servicePrefs);
+                    // Use the hooked-app context for any sub-config requests; the primary
+                    // config is provided via servicePrefs above.
+                    builder.setContext(mContext);
+                    usedService = true;
+                } catch (Exception e) {
+                    Log.w(TAG, "getRemotePreferences failed, will use createPackageContext", e);
+                }
+            }
+            if (!usedService) {
+                // Fallback: createPackageContext (older Android / non-LSPosed setups)
+                builder.setContext(getModuleContext());
+            }
+
+            mConfigManager = builder.build();
         }
         return mConfigManager;
     }
@@ -146,6 +168,8 @@ public class PluginManager implements XPluginManager {
     /**
      * Returns a Context pointing at the module's own package data directory so that
      * SharedPreferences written by the UI Activity can be read here in the hooked process.
+     * Used as a fallback for sub-configs and for older Android / non-LSPosed setups where
+     * XposedService is not available.
      * Falls back to the hooked-app context on failure.
      */
     private Context getModuleContext() {

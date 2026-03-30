@@ -57,6 +57,19 @@
             android:name="xposedmoduleentry"
             android:value="com.sky.xposed.rimet.Main" />
 
+        <!--
+             XposedProvider: ContentProvider that the libxposed framework uses to deliver
+             its binder into the hooked process. Required on Android 11+ / LSPosed so that
+             the hook code can call XposedService.getRemotePreferences() to read module
+             SharedPreferences without relying on createPackageContext (which is blocked by
+             SELinux in sandboxed environments).
+        -->
+        <provider
+            android:name="io.github.libxposed.service.XposedProvider"
+            android:authorities="${applicationId}"
+            android:exported="true"
+            android:multiprocess="false" />
+
     </application>
 
 </manifest>

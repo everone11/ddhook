@@ -22,10 +22,12 @@ import android.util.Log;
 
 import com.sky.xposed.rimet.BuildConfig;
 import com.sky.xposed.rimet.Constant;
+import com.sky.xposed.rimet.Main;
 
 import java.lang.reflect.Method;
 
 import io.github.libxposed.api.XposedInterface;
+import io.github.libxposed.service.XposedService;
 
 /**
  * System-level Hook plugin that spoofs Location, WiFi and Cell information
@@ -34,9 +36,10 @@ import io.github.libxposed.api.XposedInterface;
  * <p>Hooks Android framework APIs directly so the spoofing is version-agnostic
  * and works across any app without needing app-specific class-name mapping.</p>
  *
- * <p>Settings are read lazily from the module's own SharedPreferences via
- * {@code ActivityThread.currentApplication().createPackageContext()} so that
- * a Context is not needed at hook-registration time.</p>
+ * <p>Settings are read lazily from the module's SharedPreferences. On Android 11+
+ * with LSPosed, {@link io.github.libxposed.service.XposedService#getRemotePreferences}
+ * is used (SELinux-safe). Older setups fall back to
+ * {@code createPackageContext}.</p>
  */
 public class SystemHookPlugin {
 
@@ -61,9 +64,28 @@ public class SystemHookPlugin {
 
     /**
      * Lazily obtains the module's SharedPreferences from within the hooked process.
-     * Returns {@code null} if the preferences cannot be accessed (e.g. module not installed).
+     *
+     * <p>On Android 11+ with LSPosed, {@code createPackageContext} is blocked by SELinux.
+     * We therefore first attempt to read via {@link XposedService#getRemotePreferences},
+     * which is delivered by the framework through {@code XposedProvider} and bypasses the
+     * SELinux restriction.  Falls back to {@code createPackageContext} for older setups.
+     *
+     * @return SharedPreferences for the module's "rimet" file, or {@code null} on failure.
      */
     private static SharedPreferences getPrefs() {
+        // Primary path: use XposedService (Android 11+ / LSPosed, SELinux-safe).
+        // Capture in a local variable so onServiceDied() setting the static to null
+        // cannot cause an NPE after our null-check (and any ServiceException from a
+        // dead binder is caught below).
+        XposedService service = Main.getXposedService();
+        if (service != null) {
+            try {
+                return service.getRemotePreferences(Constant.Name.RIMET);
+            } catch (Exception e) {
+                Log.w(TAG, "getRemotePreferences failed, falling back: " + e.getMessage());
+            }
+        }
+        // Fallback: createPackageContext (works on older Android / non-LSPosed frameworks)
         try {
             Context app = (Context) Class.forName("android.app.ActivityThread")
                     .getMethod("currentApplication")
