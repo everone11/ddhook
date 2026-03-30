@@ -42,7 +42,7 @@
         -->
         <meta-data
             android:name="xposedminversion"
-            android:value="100" />
+            android:value="101" />
 
         <!-- Hook scope: only inject into DingTalk -->
         <meta-data
