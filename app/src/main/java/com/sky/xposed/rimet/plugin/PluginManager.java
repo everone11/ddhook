@@ -17,13 +17,12 @@
 package com.sky.xposed.rimet.plugin;
 
 import android.content.Context;
-import android.content.pm.PackageManager;
+import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
 import android.util.SparseArray;
 
-import com.sky.xposed.rimet.BuildConfig;
 import com.sky.xposed.rimet.Constant;
 import com.sky.xposed.rimet.data.ConfigManager;
 import com.sky.xposed.rimet.plugin.dingding.DingDingHandler;
@@ -40,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 
 import io.github.libxposed.api.XposedInterface;
+import io.github.libxposed.api.XposedModule;
 
 /**
  * Created by sky on 2018/9/24.
@@ -130,33 +130,22 @@ public class PluginManager implements XPluginManager {
     @Override
     public XConfigManager getConfigManager() {
         if (mConfigManager == null) {
-            // Read settings from the module's own SharedPreferences (written by the UI Activity).
-            // We use createPackageContext so the hook running in DingTalk's process can access
-            // the module's data directory — LSPosed adjusts SELinux labels to allow this.
-            Context configContext = getModuleContext();
+            // Use LibXposed RemotePreferences to safely read the module UI's SharedPreferences
+            // from inside the hooked-app process. This replaces createPackageContext which is
+            // blocked by Android 11+ SELinux policies.
+            SharedPreferences prefs = null;
+            if (mXposedInterface instanceof XposedModule) {
+                prefs = ((XposedModule) mXposedInterface).getRemotePreferences(Constant.Name.RIMET);
+            } else {
+                Log.w(TAG, "XposedInterface is not an XposedModule — RemotePreferences unavailable");
+            }
             mConfigManager = new ConfigManager
                     .Build(this)
-                    .setContext(configContext)
+                    .setSharedPreferences(prefs)
                     .setConfigName(Constant.Name.RIMET)
                     .build();
         }
         return mConfigManager;
-    }
-
-    /**
-     * Returns a Context pointing at the module's own package data directory so that
-     * SharedPreferences written by the UI Activity can be read here in the hooked process.
-     * Falls back to the hooked-app context on failure.
-     */
-    private Context getModuleContext() {
-        try {
-            return mContext.createPackageContext(
-                    BuildConfig.APPLICATION_ID,
-                    Context.CONTEXT_IGNORE_SECURITY);
-        } catch (PackageManager.NameNotFoundException e) {
-            Log.w(TAG, "Module package context not found, falling back to hooked context", e);
-            return mContext;
-        }
     }
 
     /**

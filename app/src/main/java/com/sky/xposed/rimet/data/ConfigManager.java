@@ -37,7 +37,15 @@ public class ConfigManager implements XConfigManager {
 
     private ConfigManager(Build build) {
         mContext = build.mContext != null ? build.mContext : build.mXPluginManager.getContext();
-        mSimplePreferences = new SimplePreferences(mContext, build.mName);
+        if (build.mSharedPreferences != null) {
+            // Use the pre-obtained SharedPreferences (e.g. from RemotePreferences IPC)
+            mSimplePreferences = new SimplePreferences(build.mSharedPreferences);
+        } else if (mContext != null) {
+            mSimplePreferences = new SimplePreferences(mContext, build.mName);
+        } else {
+            throw new IllegalStateException(
+                    "ConfigManager.Build requires either a SharedPreferences or a non-null Context");
+        }
     }
 
     @Override
@@ -105,6 +113,10 @@ public class ConfigManager implements XConfigManager {
 
         private SharedPreferences mSharedPreferences;
 
+        public SimplePreferences(SharedPreferences sharedPreferences) {
+            mSharedPreferences = sharedPreferences;
+        }
+
         public SimplePreferences(Context context, String name) {
             mSharedPreferences = context.getSharedPreferences(name, Context.MODE_PRIVATE);
         }
@@ -164,6 +176,7 @@ public class ConfigManager implements XConfigManager {
 
         private XPluginManager mXPluginManager;
         private Context mContext;
+        private SharedPreferences mSharedPreferences;
         private String mName;
 
         public Build(XPluginManager xPluginManager) {
@@ -172,6 +185,11 @@ public class ConfigManager implements XConfigManager {
 
         public Build setContext(Context context) {
             mContext = context;
+            return this;
+        }
+
+        public Build setSharedPreferences(SharedPreferences sharedPreferences) {
+            mSharedPreferences = sharedPreferences;
             return this;
         }
 
