@@ -19,13 +19,13 @@ plugins {
 }
 
 android {
-    compileSdk 33
+    compileSdk 35
     namespace 'com.sky.xposed.rimet'
 
     defaultConfig {
         applicationId "com.sky.xposed.rimet"
         minSdk 26
-        targetSdk 33
+        targetSdk 35
         versionCode 1
         versionName "1.0.0"
     }
