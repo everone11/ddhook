@@ -33,7 +33,7 @@
 
         <meta-data
             android:name="xposeddescription"
-            android:value="钉钉助手 (DingTalk Hook)" />
+            android:value="DingTalk Hook Helper" />
 
         <!-- Updated to 101 to match LibXposed API version -->
         <meta-data
