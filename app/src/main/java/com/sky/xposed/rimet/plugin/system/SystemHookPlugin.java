@@ -16,16 +16,14 @@
 
 package com.sky.xposed.rimet.plugin.system;
 
-import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
 
-import com.sky.xposed.rimet.BuildConfig;
 import com.sky.xposed.rimet.Constant;
 
 import java.lang.reflect.Method;
 
-import io.github.libxposed.api.XposedInterface;
+import io.github.libxposed.api.XposedModule;
 
 /**
  * System-level Hook plugin that spoofs Location, WiFi and Cell information
@@ -34,9 +32,9 @@ import io.github.libxposed.api.XposedInterface;
  * <p>Hooks Android framework APIs directly so the spoofing is version-agnostic
  * and works across any app without needing app-specific class-name mapping.</p>
  *
- * <p>Settings are read lazily from the module's own SharedPreferences via
- * {@code ActivityThread.currentApplication().createPackageContext()} so that
- * a Context is not needed at hook-registration time.</p>
+ * <p>Settings are read via {@link XposedModule#getRemotePreferences(String)} which
+ * uses LibXposed's cross-process IPC (backed by {@code XposedProvider}) to safely
+ * read the module UI's SharedPreferences from inside the hooked-app process.</p>
  */
 public class SystemHookPlugin {
 
@@ -46,13 +44,13 @@ public class SystemHookPlugin {
     }
 
     /**
-     * Register all system-level hooks using the provided {@link XposedInterface}.
+     * Register all system-level hooks using the provided {@link XposedModule}.
      * Safe to call from {@code onPackageReady} before any app Context is available.
      */
-    public static void setup(XposedInterface xi) {
-        hookLocation(xi);
-        hookWifiInfo(xi);
-        hookGsmCellLocation(xi);
+    public static void setup(XposedModule module) {
+        hookLocation(module);
+        hookWifiInfo(module);
+        hookGsmCellLocation(module);
     }
 
     // -----------------------------------------------------------------------
@@ -60,22 +58,12 @@ public class SystemHookPlugin {
     // -----------------------------------------------------------------------
 
     /**
-     * Lazily obtains the module's SharedPreferences from within the hooked process.
-     * Returns {@code null} if the preferences cannot be accessed (e.g. module not installed).
+     * Returns the module's SharedPreferences via LibXposed's cross-process IPC.
+     * This replaces the old {@code createPackageContext} approach that was blocked
+     * by Android 11+ SELinux policies.
      */
-    private static SharedPreferences getPrefs() {
-        try {
-            Context app = (Context) Class.forName("android.app.ActivityThread")
-                    .getMethod("currentApplication")
-                    .invoke(null);
-            if (app == null) return null;
-            Context moduleCtx = app.createPackageContext(
-                    BuildConfig.APPLICATION_ID, Context.CONTEXT_IGNORE_SECURITY);
-            return moduleCtx.getSharedPreferences(Constant.Name.RIMET, Context.MODE_PRIVATE);
-        } catch (Exception e) {
-            Log.w(TAG, "getPrefs failed: " + e.getMessage());
-            return null;
-        }
+    private static SharedPreferences getPrefs(XposedModule module) {
+        return module.getRemotePreferences(Constant.Name.RIMET);
     }
 
     private static boolean isEnabled(SharedPreferences prefs) {
@@ -91,13 +79,13 @@ public class SystemHookPlugin {
     // Location hooks
     // -----------------------------------------------------------------------
 
-    private static void hookLocation(XposedInterface xi) {
+    private static void hookLocation(XposedModule module) {
         try {
             Class<?> cls = Class.forName("android.location.Location");
 
             Method getLatitude = cls.getMethod("getLatitude");
-            xi.hook(getLatitude).intercept(chain -> {
-                SharedPreferences prefs = getPrefs();
+            module.hook(getLatitude).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
                 if (!isEnabled(prefs)) return chain.proceed();
                 String val = getString(prefs, Constant.XFlag.LATITUDE);
                 if (val.isEmpty()) return chain.proceed();
@@ -109,8 +97,8 @@ public class SystemHookPlugin {
             });
 
             Method getLongitude = cls.getMethod("getLongitude");
-            xi.hook(getLongitude).intercept(chain -> {
-                SharedPreferences prefs = getPrefs();
+            module.hook(getLongitude).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
                 if (!isEnabled(prefs)) return chain.proceed();
                 String val = getString(prefs, Constant.XFlag.LONGITUDE);
                 if (val.isEmpty()) return chain.proceed();
@@ -130,13 +118,13 @@ public class SystemHookPlugin {
     // WiFi hooks
     // -----------------------------------------------------------------------
 
-    private static void hookWifiInfo(XposedInterface xi) {
+    private static void hookWifiInfo(XposedModule module) {
         try {
             Class<?> cls = Class.forName("android.net.wifi.WifiInfo");
 
             Method getSSID = cls.getMethod("getSSID");
-            xi.hook(getSSID).intercept(chain -> {
-                SharedPreferences prefs = getPrefs();
+            module.hook(getSSID).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
                 if (!isEnabled(prefs)) return chain.proceed();
                 String ssid = getString(prefs, Constant.XFlag.WIFI_SSID);
                 if (ssid.isEmpty()) return chain.proceed();
@@ -145,8 +133,8 @@ public class SystemHookPlugin {
             });
 
             Method getBSSID = cls.getMethod("getBSSID");
-            xi.hook(getBSSID).intercept(chain -> {
-                SharedPreferences prefs = getPrefs();
+            module.hook(getBSSID).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
                 if (!isEnabled(prefs)) return chain.proceed();
                 // BSSID is not exposed in the UI; an empty value means "no override"
                 String bssid = getString(prefs, Constant.XFlag.WIFI_BSSID);
@@ -155,8 +143,8 @@ public class SystemHookPlugin {
             });
 
             Method getMacAddress = cls.getMethod("getMacAddress");
-            xi.hook(getMacAddress).intercept(chain -> {
-                SharedPreferences prefs = getPrefs();
+            module.hook(getMacAddress).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
                 if (!isEnabled(prefs)) return chain.proceed();
                 String mac = getString(prefs, Constant.XFlag.WIFI_MAC);
                 if (mac.isEmpty()) return chain.proceed();
@@ -174,13 +162,13 @@ public class SystemHookPlugin {
     // Cell location hooks
     // -----------------------------------------------------------------------
 
-    private static void hookGsmCellLocation(XposedInterface xi) {
+    private static void hookGsmCellLocation(XposedModule module) {
         try {
             Class<?> cls = Class.forName("android.telephony.gsm.GsmCellLocation");
 
             Method getLac = cls.getMethod("getLac");
-            xi.hook(getLac).intercept(chain -> {
-                SharedPreferences prefs = getPrefs();
+            module.hook(getLac).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
                 if (!isEnabled(prefs)) return chain.proceed();
                 // LAC is not exposed in the UI; an empty value means "no override"
                 String val = getString(prefs, Constant.XFlag.CELL_LAC);
@@ -193,8 +181,8 @@ public class SystemHookPlugin {
             });
 
             Method getCid = cls.getMethod("getCid");
-            xi.hook(getCid).intercept(chain -> {
-                SharedPreferences prefs = getPrefs();
+            module.hook(getCid).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
                 if (!isEnabled(prefs)) return chain.proceed();
                 String val = getString(prefs, Constant.XFlag.CELL_ID);
                 if (val.isEmpty()) return chain.proceed();

@@ -62,6 +62,9 @@ dependencies {
     // libxposed modern API (replaces de.robv.android.xposed:api:82)
     compileOnly 'io.github.libxposed:api:101.0.0'
 
+    // libxposed service — provides XposedProvider for cross-process RemotePreferences
+    implementation 'io.github.libxposed:service:101.0.0'
+
     // Annotation support (@NonNull, @Nullable, etc.)
     implementation 'androidx.annotation:annotation:1.6.0'
 
