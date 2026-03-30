@@ -26,28 +26,35 @@
             </intent-filter>
         </activity>
 
-        <!-- libxposed module declarations (replaces legacy assets/xposed_init) -->
+        <!-- Required for LSPosed Manager to recognise this APK as an Xposed module -->
         <meta-data
-            android:name="libxposedmodule"
+            android:name="xposedmodule"
             android:value="true" />
 
         <meta-data
-            android:name="libxposeddescription"
+            android:name="xposeddescription"
             android:value="DingTalk Hook Helper" />
 
-        <!-- Updated to 101 to match LibXposed API version -->
+        <!--
+             xposedminversion >= 100 signals to LSPosed that this module uses the
+             modern libxposed API (io.github.libxposed:api:101.0.0).
+             No assets/xposed_init is needed; LSPosed reads xposedmoduleentry instead.
+        -->
         <meta-data
-            android:name="libxposedminversion"
-            android:value="101" />
+            android:name="xposedminversion"
+            android:value="100" />
 
         <!-- Hook scope: only inject into DingTalk -->
         <meta-data
-            android:name="libxposedscope"
+            android:name="xposedscope"
             android:resource="@array/xposed_scope" />
 
-        <!-- Entry point for the libxposed modern API (replaces assets/xposed_init) -->
+        <!--
+             Entry point for the libxposed modern API.
+             Replaces the legacy assets/xposed_init plain-text file.
+        -->
         <meta-data
-            android:name="libxposedmoduleentry"
+            android:name="xposedmoduleentry"
             android:value="com.sky.xposed.rimet.Main" />
 
     </application>
