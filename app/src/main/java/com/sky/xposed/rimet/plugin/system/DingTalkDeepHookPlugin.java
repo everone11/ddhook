@@ -130,7 +130,7 @@ public class DingTalkDeepHookPlugin {
 
             module.log(Log.INFO, TAG, "hookGMapLocation installed");
         } catch (Throwable e) {
-            module.log(Log.WARN, TAG, "hookGMapLocation failed: " + e);
+            module.log(Log.WARN, TAG, "hookGMapLocation failed", e);
         }
     }
 
@@ -183,7 +183,7 @@ public class DingTalkDeepHookPlugin {
 
             module.log(Log.INFO, TAG, "hookLocationProxy installed");
         } catch (Throwable e) {
-            module.log(Log.WARN, TAG, "hookLocationProxy failed: " + e);
+            module.log(Log.WARN, TAG, "hookLocationProxy failed", e);
         }
     }
 
@@ -208,7 +208,7 @@ public class DingTalkDeepHookPlugin {
                 });
                 module.log(Log.INFO, TAG, "hookAopWifiManager#getScanResults installed");
             } catch (Throwable e) {
-                module.log(Log.WARN, TAG, "hookAopWifiManager#getScanResults failed: " + e);
+                module.log(Log.WARN, TAG, "hookAopWifiManager#getScanResults failed", e);
             }
 
             // startScan(android.net.wifi.WifiManager) — returns boolean
@@ -222,11 +222,11 @@ public class DingTalkDeepHookPlugin {
                 });
                 module.log(Log.INFO, TAG, "hookAopWifiManager#startScan installed");
             } catch (Throwable e) {
-                module.log(Log.WARN, TAG, "hookAopWifiManager#startScan failed: " + e);
+                module.log(Log.WARN, TAG, "hookAopWifiManager#startScan failed", e);
             }
 
         } catch (Throwable e) {
-            module.log(Log.WARN, TAG, "hookAopWifiManager class not found: " + e);
+            module.log(Log.WARN, TAG, "hookAopWifiManager class not found", e);
         }
     }
 }
