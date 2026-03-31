@@ -25,6 +25,7 @@ import androidx.annotation.NonNull;
 import com.sky.xposed.rimet.data.M;
 import com.sky.xposed.rimet.data.VersionManager;
 import com.sky.xposed.rimet.plugin.PluginManager;
+import com.sky.xposed.rimet.plugin.system.AlipayMapHookPlugin;
 import com.sky.xposed.rimet.plugin.system.DingTalkDeepHookPlugin;
 import com.sky.xposed.rimet.plugin.system.SystemHookPlugin;
 import com.sky.xposed.rimet.plugin.interfaces.XConfig;
@@ -88,6 +89,10 @@ public class Main extends XposedModule {
         // Apply DingTalk internal class hooks (GMapLocation, LocationProxy, AOP WiFi) in
         // ALL DingTalk processes so that every process that touches location data is covered.
         DingTalkDeepHookPlugin.setup(this, classLoader);
+
+        // Apply Alipay map model hooks (LatLonPoint, IndoorLocation, LBSWifiItemInfo,
+        // SearchPoiRequest) — these Alipay SDK classes are bundled inside DingTalk.
+        AlipayMapHookPlugin.setup(this, classLoader);
 
         // DDApplication.onCreate hook is only meaningful in the main (first) process.
         if (!lpParam.isFirstPackage()) return;
