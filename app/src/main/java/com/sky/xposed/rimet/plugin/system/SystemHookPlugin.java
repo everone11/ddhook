@@ -17,13 +17,13 @@
 package com.sky.xposed.rimet.plugin.system;
 
 import android.content.SharedPreferences;
-import android.telephony.gsm.GsmCellLocation;
 import android.util.Log;
 
 import com.sky.xposed.rimet.Constant;
 
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicLong;
 
 import io.github.libxposed.api.XposedModule;
 
@@ -46,14 +46,14 @@ public class SystemHookPlugin {
 
     // -----------------------------------------------------------------------
     // Preference cache — refreshed at most once every PREFS_CACHE_TTL_MS.
-    // Volatile so changes are visible across threads without full synchronisation.
+    // Access is synchronized to ensure thread-safe check-then-act.
     // -----------------------------------------------------------------------
-    private static volatile SharedPreferences sPrefsCache = null;
-    private static volatile long sPrefsLastRefreshMs = 0L;
+    private static SharedPreferences sPrefsCache = null;
+    private static long sPrefsLastRefreshMs = 0L;
     private static final long PREFS_CACHE_TTL_MS = 2_000L;
 
-    // Rate-limited spoof-log to avoid logcat flooding on high-frequency hooks.
-    private static volatile long sLastSpoofLogMs = 0L;
+    // Rate-limited spoof-log using AtomicLong for lock-free CAS update.
+    private static final AtomicLong sLastSpoofLogMs = new AtomicLong(0L);
     private static final long LOG_INTERVAL_MS = 5_000L;
 
     private SystemHookPlugin() {
@@ -80,8 +80,9 @@ public class SystemHookPlugin {
     /**
      * Returns the module's SharedPreferences, refreshed via LibXposed IPC at most
      * once per {@link #PREFS_CACHE_TTL_MS} to avoid per-call IPC overhead.
+     * Synchronized to guard the check-then-act against concurrent refreshes.
      */
-    static SharedPreferences getPrefs(XposedModule module) {
+    static synchronized SharedPreferences getPrefs(XposedModule module) {
         long now = System.currentTimeMillis();
         if (sPrefsCache == null || (now - sPrefsLastRefreshMs) > PREFS_CACHE_TTL_MS) {
             sPrefsCache = module.getRemotePreferences(Constant.Name.RIMET);
@@ -99,11 +100,11 @@ public class SystemHookPlugin {
         return prefs != null ? prefs.getString(Integer.toString(key), "") : "";
     }
 
-    /** Rate-limited info log emitted when a spoof value is actually returned. */
+    /** Rate-limited info log using CAS to prevent duplicate entries within the window. */
     static void logSpoofed(String field) {
         long now = System.currentTimeMillis();
-        if (now - sLastSpoofLogMs > LOG_INTERVAL_MS) {
-            sLastSpoofLogMs = now;
+        long last = sLastSpoofLogMs.get();
+        if (now - last > LOG_INTERVAL_MS && sLastSpoofLogMs.compareAndSet(last, now)) {
             Log.i(TAG, "Spoofing " + field);
         }
     }
@@ -282,10 +283,14 @@ public class SystemHookPlugin {
                     String cidStr = getString(prefs, Constant.XFlag.CELL_ID);
                     if (lacStr.isEmpty() && cidStr.isEmpty()) return chain.proceed();
                     try {
-                        GsmCellLocation fake = new GsmCellLocation();
+                        // Construct a GsmCellLocation via reflection to avoid direct use of
+                        // the deprecated android.telephony.gsm.GsmCellLocation type.
+                        Class<?> gsmCls = Class.forName("android.telephony.gsm.GsmCellLocation");
+                        Object fake = gsmCls.getDeclaredConstructor().newInstance();
                         int lac = lacStr.isEmpty() ? 0 : Integer.parseInt(lacStr);
                         int cid = cidStr.isEmpty() ? 0 : Integer.parseInt(cidStr);
-                        fake.setLacAndCid(lac, cid);
+                        gsmCls.getMethod("setLacAndCid", int.class, int.class)
+                                .invoke(fake, lac, cid);
                         logSpoofed("TelephonyManager#getCellLocation");
                         return fake;
                     } catch (Exception e) {

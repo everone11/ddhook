@@ -145,6 +145,10 @@ public class DingTalkDeepHookPlugin {
             Class<?> proxyCls = classLoader.loadClass(
                     "com.alibaba.android.dingtalkbase.amap.LocationProxy");
 
+            // Cache the setter Methods for reuse on every onLocationChanged call.
+            final Method setLat = aMapLocationCls.getMethod("setLatitude", double.class);
+            final Method setLon = aMapLocationCls.getMethod("setLongitude", double.class);
+
             Method onLocationChanged = proxyCls.getMethod(
                     "onLocationChanged", aMapLocationCls);
 
@@ -155,20 +159,24 @@ public class DingTalkDeepHookPlugin {
                 Object aMapLocation = chain.getArg(0);
                 if (aMapLocation == null) return chain.proceed();
 
+                // Apply lat/lon overrides independently (consistent with getter hooks).
                 String latStr = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
                 String lonStr = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
-                if (latStr.isEmpty() || lonStr.isEmpty()) return chain.proceed();
-
+                boolean patched = false;
                 try {
-                    double lat = Double.parseDouble(latStr);
-                    double lon = Double.parseDouble(lonStr);
-                    Method setLat = aMapLocationCls.getMethod("setLatitude", double.class);
-                    Method setLon = aMapLocationCls.getMethod("setLongitude", double.class);
-                    setLat.invoke(aMapLocation, lat);
-                    setLon.invoke(aMapLocation, lon);
-                    SystemHookPlugin.logSpoofed("LocationProxy#onLocationChanged");
+                    if (!latStr.isEmpty()) {
+                        setLat.invoke(aMapLocation, Double.parseDouble(latStr));
+                        patched = true;
+                    }
+                    if (!lonStr.isEmpty()) {
+                        setLon.invoke(aMapLocation, Double.parseDouble(lonStr));
+                        patched = true;
+                    }
                 } catch (Exception ignored) {
                     // Reflection failure — proceed with original location.
+                }
+                if (patched) {
+                    SystemHookPlugin.logSpoofed("LocationProxy#onLocationChanged");
                 }
                 return chain.proceed();
             });
