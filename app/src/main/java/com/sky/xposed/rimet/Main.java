@@ -25,6 +25,7 @@ import androidx.annotation.NonNull;
 import com.sky.xposed.rimet.data.M;
 import com.sky.xposed.rimet.data.VersionManager;
 import com.sky.xposed.rimet.plugin.PluginManager;
+import com.sky.xposed.rimet.plugin.system.AlipayMapHookPlugin;
 import com.sky.xposed.rimet.plugin.system.DingTalkDeepHookPlugin;
 import com.sky.xposed.rimet.plugin.system.SystemHookPlugin;
 import com.sky.xposed.rimet.plugin.interfaces.XConfig;
@@ -102,6 +103,10 @@ public class Main extends XposedModule {
         } catch (Throwable t) {
             log(Log.WARN, TAG, "Failed to hook Application.onCreate for deep hooks", t);
         }
+
+        // Apply Alipay map model hooks (LatLonPoint, IndoorLocation, LBSWifiItemInfo,
+        // SearchPoiRequest) — these Alipay SDK classes are bundled inside DingTalk.
+        AlipayMapHookPlugin.setup(this, classLoader);
 
         // DDApplication.onCreate hook is only meaningful in the main (first) process.
         if (!lpParam.isFirstPackage()) return;
