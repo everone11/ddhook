@@ -22,6 +22,7 @@ import android.util.Log;
 import com.sky.xposed.rimet.Constant;
 
 import java.lang.reflect.Method;
+import java.util.Collections;
 
 import io.github.libxposed.api.XposedModule;
 
@@ -49,8 +50,11 @@ public class SystemHookPlugin {
      */
     public static void setup(XposedModule module) {
         hookLocation(module);
+        hookAMapLocation(module);
         hookWifiInfo(module);
+        hookWifiScanResults(module);
         hookGsmCellLocation(module);
+        hookAllCellInfo(module);
     }
 
     // -----------------------------------------------------------------------
@@ -195,6 +199,85 @@ public class SystemHookPlugin {
 
         } catch (Exception e) {
             Log.w(TAG, "hookGsmCellLocation failed: " + e.getMessage());
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // WiFi scan results hook
+    // -----------------------------------------------------------------------
+
+    private static void hookWifiScanResults(XposedModule module) {
+        try {
+            Class<?> cls = Class.forName("android.net.wifi.WifiManager");
+
+            Method getScanResults = cls.getMethod("getScanResults");
+            module.hook(getScanResults).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
+                if (!isEnabled(prefs)) return chain.proceed();
+                return Collections.emptyList();
+            });
+
+        } catch (Exception e) {
+            Log.w(TAG, "hookWifiScanResults failed: " + e.getMessage());
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Cell info hook (TelephonyManager)
+    // -----------------------------------------------------------------------
+
+    private static void hookAllCellInfo(XposedModule module) {
+        try {
+            Class<?> cls = Class.forName("android.telephony.TelephonyManager");
+
+            Method getAllCellInfo = cls.getMethod("getAllCellInfo");
+            module.hook(getAllCellInfo).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
+                if (!isEnabled(prefs)) return chain.proceed();
+                return Collections.emptyList();
+            });
+
+        } catch (Exception e) {
+            Log.w(TAG, "hookAllCellInfo failed: " + e.getMessage());
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // AMap SDK location hook
+    // -----------------------------------------------------------------------
+
+    private static void hookAMapLocation(XposedModule module) {
+        try {
+            Class<?> cls = Class.forName("com.amap.api.location.AMapLocation");
+
+            Method getLatitude = cls.getMethod("getLatitude");
+            module.hook(getLatitude).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
+                if (!isEnabled(prefs)) return chain.proceed();
+                String val = getString(prefs, Constant.XFlag.LATITUDE);
+                if (val.isEmpty()) return chain.proceed();
+                try {
+                    return Double.parseDouble(val);
+                } catch (NumberFormatException e) {
+                    return chain.proceed();
+                }
+            });
+
+            Method getLongitude = cls.getMethod("getLongitude");
+            module.hook(getLongitude).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
+                if (!isEnabled(prefs)) return chain.proceed();
+                String val = getString(prefs, Constant.XFlag.LONGITUDE);
+                if (val.isEmpty()) return chain.proceed();
+                try {
+                    return Double.parseDouble(val);
+                } catch (NumberFormatException e) {
+                    return chain.proceed();
+                }
+            });
+
+        } catch (Exception e) {
+            Log.w(TAG, "hookAMapLocation failed: " + e.getMessage());
         }
     }
 }
