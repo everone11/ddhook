@@ -76,11 +76,11 @@ public class Main extends XposedModule {
     @Override
     public void onPackageReady(@NonNull XposedModuleInterface.PackageReadyParam lpParam) {
 
-        // Only process the first package (primary process)
-        if (!lpParam.isFirstPackage()) return;
-
-        // Apply system-level hooks (Location/WiFi/Cell) for every in-scope package
+        // Apply system-level hooks (Location/WiFi/Cell) for every in-scope package and process
         SystemHookPlugin.setup(this);
+
+        // Only process the first package (primary process) for DingTalk-specific hooks
+        if (!lpParam.isFirstPackage()) return;
 
         // DingTalk-specific hooks
         if (!Constant.Rimet.PACKAGE_NAME.equals(lpParam.getPackageName())) return;
