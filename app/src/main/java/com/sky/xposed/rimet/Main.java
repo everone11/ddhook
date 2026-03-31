@@ -94,13 +94,13 @@ public class Main extends XposedModule {
                 try {
                     DingTalkDeepHookPlugin.setup(Main.this, classLoader);
                 } catch (Throwable t) {
-                    log(Log.WARN, TAG, "DingTalkDeepHookPlugin.setup failed: " + t);
+                    log(Log.WARN, TAG, "DingTalkDeepHookPlugin.setup failed", t);
                 }
                 return chain.proceed();
             });
             log(Log.INFO, TAG, "Application.onCreate hooked for DingTalk deep hooks");
         } catch (Throwable t) {
-            log(Log.WARN, TAG, "Failed to hook Application.onCreate for deep hooks: " + t);
+            log(Log.WARN, TAG, "Failed to hook Application.onCreate for deep hooks", t);
         }
 
         // DDApplication.onCreate hook is only meaningful in the main (first) process.

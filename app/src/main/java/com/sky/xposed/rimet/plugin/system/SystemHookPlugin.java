@@ -147,7 +147,7 @@ public class SystemHookPlugin {
 
             module.log(Log.INFO, TAG, "hookLocation installed");
         } catch (Throwable e) {
-            module.log(Log.WARN, TAG, "hookLocation failed: " + e);
+            module.log(Log.WARN, TAG, "hookLocation failed", e);
         }
     }
 
@@ -191,7 +191,7 @@ public class SystemHookPlugin {
             });
 
         } catch (Throwable e) {
-            module.log(Log.WARN, TAG, "hookWifiInfo failed: " + e);
+            module.log(Log.WARN, TAG, "hookWifiInfo failed", e);
         }
     }
 
@@ -227,7 +227,7 @@ public class SystemHookPlugin {
             });
 
         } catch (Throwable e) {
-            module.log(Log.WARN, TAG, "hookGsmCellLocation failed: " + e);
+            module.log(Log.WARN, TAG, "hookGsmCellLocation failed", e);
         }
     }
 
@@ -253,7 +253,7 @@ public class SystemHookPlugin {
 
             module.log(Log.INFO, TAG, "hookWifiScanResults installed");
         } catch (Throwable e) {
-            module.log(Log.WARN, TAG, "hookWifiScanResults failed: " + e);
+            module.log(Log.WARN, TAG, "hookWifiScanResults failed", e);
         }
     }
 
@@ -303,7 +303,7 @@ public class SystemHookPlugin {
 
             module.log(Log.INFO, TAG, "hookAllCellInfo installed");
         } catch (Throwable e) {
-            module.log(Log.WARN, TAG, "hookAllCellInfo failed: " + e);
+            module.log(Log.WARN, TAG, "hookAllCellInfo failed", e);
         }
     }
 
@@ -371,7 +371,7 @@ public class SystemHookPlugin {
 
             module.log(Log.INFO, TAG, "hookAMapLocation installed");
         } catch (Throwable e) {
-            module.log(Log.WARN, TAG, "hookAMapLocation failed: " + e);
+            module.log(Log.WARN, TAG, "hookAMapLocation failed", e);
         }
     }
 }
