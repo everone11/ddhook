@@ -85,9 +85,23 @@ public class Main extends XposedModule {
 
         ClassLoader classLoader = lpParam.getClassLoader();
 
-        // Apply DingTalk internal class hooks (GMapLocation, LocationProxy, AOP WiFi) in
-        // ALL DingTalk processes so that every process that touches location data is covered.
-        DingTalkDeepHookPlugin.setup(this, classLoader);
+        // Defer DingTalk internal class hooks until Application.onCreate() fires, which is
+        // after MultiDex.install() completes and all secondary dex classes are resolvable.
+        try {
+            Class<?> appCls = Class.forName("android.app.Application");
+            Method appOnCreate = appCls.getDeclaredMethod("onCreate");
+            hook(appOnCreate).intercept(chain -> {
+                try {
+                    DingTalkDeepHookPlugin.setup(Main.this, classLoader);
+                } catch (Throwable t) {
+                    log(Log.WARN, TAG, "DingTalkDeepHookPlugin.setup failed: " + t);
+                }
+                return chain.proceed();
+            });
+            log(Log.INFO, TAG, "Application.onCreate hooked for DingTalk deep hooks");
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "Failed to hook Application.onCreate for deep hooks: " + t);
+        }
 
         // DDApplication.onCreate hook is only meaningful in the main (first) process.
         if (!lpParam.isFirstPackage()) return;
