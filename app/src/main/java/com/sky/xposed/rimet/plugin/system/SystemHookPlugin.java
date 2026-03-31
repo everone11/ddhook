@@ -17,6 +17,7 @@
 package com.sky.xposed.rimet.plugin.system;
 
 import android.content.SharedPreferences;
+import android.telephony.gsm.GsmCellLocation;
 import android.util.Log;
 
 import com.sky.xposed.rimet.Constant;
@@ -35,11 +36,25 @@ import io.github.libxposed.api.XposedModule;
  *
  * <p>Settings are read via {@link XposedModule#getRemotePreferences(String)} which
  * uses LibXposed's cross-process IPC (backed by {@code XposedProvider}) to safely
- * read the module UI's SharedPreferences from inside the hooked-app process.</p>
+ * read the module UI's SharedPreferences from inside the hooked-app process.
+ * A lightweight in-memory cache (2-second TTL) prevents IPC overhead on every
+ * hooked call.</p>
  */
 public class SystemHookPlugin {
 
     private static final String TAG = "SystemHookPlugin";
+
+    // -----------------------------------------------------------------------
+    // Preference cache — refreshed at most once every PREFS_CACHE_TTL_MS.
+    // Volatile so changes are visible across threads without full synchronisation.
+    // -----------------------------------------------------------------------
+    private static volatile SharedPreferences sPrefsCache = null;
+    private static volatile long sPrefsLastRefreshMs = 0L;
+    private static final long PREFS_CACHE_TTL_MS = 2_000L;
+
+    // Rate-limited spoof-log to avoid logcat flooding on high-frequency hooks.
+    private static volatile long sLastSpoofLogMs = 0L;
+    private static final long LOG_INTERVAL_MS = 5_000L;
 
     private SystemHookPlugin() {
     }
@@ -55,6 +70,7 @@ public class SystemHookPlugin {
         hookWifiScanResults(module);
         hookGsmCellLocation(module);
         hookAllCellInfo(module);
+        Log.i(TAG, "System hooks installed");
     }
 
     // -----------------------------------------------------------------------
@@ -62,21 +78,34 @@ public class SystemHookPlugin {
     // -----------------------------------------------------------------------
 
     /**
-     * Returns the module's SharedPreferences via LibXposed's cross-process IPC.
-     * This replaces the old {@code createPackageContext} approach that was blocked
-     * by Android 11+ SELinux policies.
+     * Returns the module's SharedPreferences, refreshed via LibXposed IPC at most
+     * once per {@link #PREFS_CACHE_TTL_MS} to avoid per-call IPC overhead.
      */
-    private static SharedPreferences getPrefs(XposedModule module) {
-        return module.getRemotePreferences(Constant.Name.RIMET);
+    static SharedPreferences getPrefs(XposedModule module) {
+        long now = System.currentTimeMillis();
+        if (sPrefsCache == null || (now - sPrefsLastRefreshMs) > PREFS_CACHE_TTL_MS) {
+            sPrefsCache = module.getRemotePreferences(Constant.Name.RIMET);
+            sPrefsLastRefreshMs = now;
+        }
+        return sPrefsCache;
     }
 
-    private static boolean isEnabled(SharedPreferences prefs) {
+    static boolean isEnabled(SharedPreferences prefs) {
         return prefs != null && prefs.getBoolean(
                 Integer.toString(Constant.XFlag.ENABLE_LOCATION), false);
     }
 
-    private static String getString(SharedPreferences prefs, int key) {
+    static String getString(SharedPreferences prefs, int key) {
         return prefs != null ? prefs.getString(Integer.toString(key), "") : "";
+    }
+
+    /** Rate-limited info log emitted when a spoof value is actually returned. */
+    static void logSpoofed(String field) {
+        long now = System.currentTimeMillis();
+        if (now - sLastSpoofLogMs > LOG_INTERVAL_MS) {
+            sLastSpoofLogMs = now;
+            Log.i(TAG, "Spoofing " + field);
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -94,6 +123,7 @@ public class SystemHookPlugin {
                 String val = getString(prefs, Constant.XFlag.LATITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
+                    logSpoofed("android.location.Location#getLatitude");
                     return Double.parseDouble(val);
                 } catch (NumberFormatException e) {
                     return chain.proceed();
@@ -107,12 +137,14 @@ public class SystemHookPlugin {
                 String val = getString(prefs, Constant.XFlag.LONGITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
+                    logSpoofed("android.location.Location#getLongitude");
                     return Double.parseDouble(val);
                 } catch (NumberFormatException e) {
                     return chain.proceed();
                 }
             });
 
+            Log.i(TAG, "hookLocation installed");
         } catch (Exception e) {
             Log.w(TAG, "hookLocation failed: " + e.getMessage());
         }
@@ -162,10 +194,6 @@ public class SystemHookPlugin {
         }
     }
 
-    // -----------------------------------------------------------------------
-    // Cell location hooks
-    // -----------------------------------------------------------------------
-
     private static void hookGsmCellLocation(XposedModule module) {
         try {
             Class<?> cls = Class.forName("android.telephony.gsm.GsmCellLocation");
@@ -202,10 +230,6 @@ public class SystemHookPlugin {
         }
     }
 
-    // -----------------------------------------------------------------------
-    // WiFi scan results hook
-    // -----------------------------------------------------------------------
-
     private static void hookWifiScanResults(XposedModule module) {
         try {
             Class<?> cls = Class.forName("android.net.wifi.WifiManager");
@@ -214,9 +238,19 @@ public class SystemHookPlugin {
             module.hook(getScanResults).intercept(chain -> {
                 SharedPreferences prefs = getPrefs(module);
                 if (!isEnabled(prefs)) return chain.proceed();
+                logSpoofed("WifiManager#getScanResults");
                 return Collections.emptyList();
             });
 
+            Method startScan = cls.getMethod("startScan");
+            module.hook(startScan).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
+                if (!isEnabled(prefs)) return chain.proceed();
+                // Return true to satisfy callers without triggering a real scan.
+                return true;
+            });
+
+            Log.i(TAG, "hookWifiScanResults installed");
         } catch (Exception e) {
             Log.w(TAG, "hookWifiScanResults failed: " + e.getMessage());
         }
@@ -234,9 +268,35 @@ public class SystemHookPlugin {
             module.hook(getAllCellInfo).intercept(chain -> {
                 SharedPreferences prefs = getPrefs(module);
                 if (!isEnabled(prefs)) return chain.proceed();
+                logSpoofed("TelephonyManager#getAllCellInfo");
                 return Collections.emptyList();
             });
 
+            // getCellLocation is present on older APIs but may be absent on API 29+.
+            try {
+                Method getCellLocation = cls.getMethod("getCellLocation");
+                module.hook(getCellLocation).intercept(chain -> {
+                    SharedPreferences prefs = getPrefs(module);
+                    if (!isEnabled(prefs)) return chain.proceed();
+                    String lacStr = getString(prefs, Constant.XFlag.CELL_LAC);
+                    String cidStr = getString(prefs, Constant.XFlag.CELL_ID);
+                    if (lacStr.isEmpty() && cidStr.isEmpty()) return chain.proceed();
+                    try {
+                        GsmCellLocation fake = new GsmCellLocation();
+                        int lac = lacStr.isEmpty() ? 0 : Integer.parseInt(lacStr);
+                        int cid = cidStr.isEmpty() ? 0 : Integer.parseInt(cidStr);
+                        fake.setLacAndCid(lac, cid);
+                        logSpoofed("TelephonyManager#getCellLocation");
+                        return fake;
+                    } catch (Exception e) {
+                        return chain.proceed();
+                    }
+                });
+            } catch (Exception ignored) {
+                // getCellLocation may be absent on some API levels — safe to skip.
+            }
+
+            Log.i(TAG, "hookAllCellInfo installed");
         } catch (Exception e) {
             Log.w(TAG, "hookAllCellInfo failed: " + e.getMessage());
         }
@@ -257,6 +317,7 @@ public class SystemHookPlugin {
                 String val = getString(prefs, Constant.XFlag.LATITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
+                    logSpoofed("AMapLocation#getLatitude");
                     return Double.parseDouble(val);
                 } catch (NumberFormatException e) {
                     return chain.proceed();
@@ -270,12 +331,40 @@ public class SystemHookPlugin {
                 String val = getString(prefs, Constant.XFlag.LONGITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
+                    logSpoofed("AMapLocation#getLongitude");
                     return Double.parseDouble(val);
                 } catch (NumberFormatException e) {
                     return chain.proceed();
                 }
             });
 
+            Method setLatitude = cls.getMethod("setLatitude", double.class);
+            module.hook(setLatitude).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
+                if (!isEnabled(prefs)) return chain.proceed();
+                String val = getString(prefs, Constant.XFlag.LATITUDE);
+                if (val.isEmpty()) return chain.proceed();
+                try {
+                    return chain.proceed(new Object[]{Double.parseDouble(val)});
+                } catch (NumberFormatException e) {
+                    return chain.proceed();
+                }
+            });
+
+            Method setLongitude = cls.getMethod("setLongitude", double.class);
+            module.hook(setLongitude).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
+                if (!isEnabled(prefs)) return chain.proceed();
+                String val = getString(prefs, Constant.XFlag.LONGITUDE);
+                if (val.isEmpty()) return chain.proceed();
+                try {
+                    return chain.proceed(new Object[]{Double.parseDouble(val)});
+                } catch (NumberFormatException e) {
+                    return chain.proceed();
+                }
+            });
+
+            Log.i(TAG, "hookAMapLocation installed");
         } catch (Exception e) {
             Log.w(TAG, "hookAMapLocation failed: " + e.getMessage());
         }

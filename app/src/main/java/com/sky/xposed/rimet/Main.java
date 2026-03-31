@@ -25,6 +25,7 @@ import androidx.annotation.NonNull;
 import com.sky.xposed.rimet.data.M;
 import com.sky.xposed.rimet.data.VersionManager;
 import com.sky.xposed.rimet.plugin.PluginManager;
+import com.sky.xposed.rimet.plugin.system.DingTalkDeepHookPlugin;
 import com.sky.xposed.rimet.plugin.system.SystemHookPlugin;
 import com.sky.xposed.rimet.plugin.interfaces.XConfig;
 import com.sky.xposed.rimet.plugin.interfaces.XPluginManager;
@@ -79,15 +80,19 @@ public class Main extends XposedModule {
         // Apply system-level hooks (Location/WiFi/Cell) for every in-scope package and process
         SystemHookPlugin.setup(this);
 
-        // Only process the first package (primary process) for DingTalk-specific hooks
-        if (!lpParam.isFirstPackage()) return;
-
-        // DingTalk-specific hooks
+        // All remaining hooks are DingTalk-specific.
         if (!Constant.Rimet.PACKAGE_NAME.equals(lpParam.getPackageName())) return;
 
-        log(Log.INFO, TAG, "DingTalk package ready — setting up hooks");
-
         ClassLoader classLoader = lpParam.getClassLoader();
+
+        // Apply DingTalk internal class hooks (GMapLocation, LocationProxy, AOP WiFi) in
+        // ALL DingTalk processes so that every process that touches location data is covered.
+        DingTalkDeepHookPlugin.setup(this, classLoader);
+
+        // DDApplication.onCreate hook is only meaningful in the main (first) process.
+        if (!lpParam.isFirstPackage()) return;
+
+        log(Log.INFO, TAG, "DingTalk package ready — setting up hooks");
 
         // Obtain a Context from the system to check DingTalk's installed version.
         Context systemContext = getSystemContext();
