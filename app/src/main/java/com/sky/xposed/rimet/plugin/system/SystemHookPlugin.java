@@ -70,7 +70,7 @@ public class SystemHookPlugin {
         hookWifiScanResults(module);
         hookGsmCellLocation(module);
         hookAllCellInfo(module);
-        Log.i(TAG, "System hooks installed");
+        module.log(Log.INFO, TAG, "System hooks installed");
     }
 
     // -----------------------------------------------------------------------
@@ -101,11 +101,11 @@ public class SystemHookPlugin {
     }
 
     /** Rate-limited info log using CAS to prevent duplicate entries within the window. */
-    static void logSpoofed(String field) {
+    static void logSpoofed(XposedModule module, String field) {
         long now = System.currentTimeMillis();
         long last = sLastSpoofLogMs.get();
         if (now - last > LOG_INTERVAL_MS && sLastSpoofLogMs.compareAndSet(last, now)) {
-            Log.i(TAG, "Spoofing " + field);
+            module.log(Log.INFO, TAG, "Spoofing " + field);
         }
     }
 
@@ -124,7 +124,7 @@ public class SystemHookPlugin {
                 String val = getString(prefs, Constant.XFlag.LATITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
-                    logSpoofed("android.location.Location#getLatitude");
+                    logSpoofed(module, "android.location.Location#getLatitude");
                     return Double.parseDouble(val);
                 } catch (NumberFormatException e) {
                     return chain.proceed();
@@ -138,16 +138,16 @@ public class SystemHookPlugin {
                 String val = getString(prefs, Constant.XFlag.LONGITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
-                    logSpoofed("android.location.Location#getLongitude");
+                    logSpoofed(module, "android.location.Location#getLongitude");
                     return Double.parseDouble(val);
                 } catch (NumberFormatException e) {
                     return chain.proceed();
                 }
             });
 
-            Log.i(TAG, "hookLocation installed");
-        } catch (Exception e) {
-            Log.w(TAG, "hookLocation failed: " + e.getMessage());
+            module.log(Log.INFO, TAG, "hookLocation installed");
+        } catch (Throwable e) {
+            module.log(Log.WARN, TAG, "hookLocation failed: " + e);
         }
     }
 
@@ -190,8 +190,8 @@ public class SystemHookPlugin {
                 return mac;
             });
 
-        } catch (Exception e) {
-            Log.w(TAG, "hookWifiInfo failed: " + e.getMessage());
+        } catch (Throwable e) {
+            module.log(Log.WARN, TAG, "hookWifiInfo failed: " + e);
         }
     }
 
@@ -226,8 +226,8 @@ public class SystemHookPlugin {
                 }
             });
 
-        } catch (Exception e) {
-            Log.w(TAG, "hookGsmCellLocation failed: " + e.getMessage());
+        } catch (Throwable e) {
+            module.log(Log.WARN, TAG, "hookGsmCellLocation failed: " + e);
         }
     }
 
@@ -239,7 +239,7 @@ public class SystemHookPlugin {
             module.hook(getScanResults).intercept(chain -> {
                 SharedPreferences prefs = getPrefs(module);
                 if (!isEnabled(prefs)) return chain.proceed();
-                logSpoofed("WifiManager#getScanResults");
+                logSpoofed(module, "WifiManager#getScanResults");
                 return Collections.emptyList();
             });
 
@@ -251,9 +251,9 @@ public class SystemHookPlugin {
                 return true;
             });
 
-            Log.i(TAG, "hookWifiScanResults installed");
-        } catch (Exception e) {
-            Log.w(TAG, "hookWifiScanResults failed: " + e.getMessage());
+            module.log(Log.INFO, TAG, "hookWifiScanResults installed");
+        } catch (Throwable e) {
+            module.log(Log.WARN, TAG, "hookWifiScanResults failed: " + e);
         }
     }
 
@@ -269,7 +269,7 @@ public class SystemHookPlugin {
             module.hook(getAllCellInfo).intercept(chain -> {
                 SharedPreferences prefs = getPrefs(module);
                 if (!isEnabled(prefs)) return chain.proceed();
-                logSpoofed("TelephonyManager#getAllCellInfo");
+                logSpoofed(module, "TelephonyManager#getAllCellInfo");
                 return Collections.emptyList();
             });
 
@@ -291,7 +291,7 @@ public class SystemHookPlugin {
                         int cid = cidStr.isEmpty() ? 0 : Integer.parseInt(cidStr);
                         gsmCls.getMethod("setLacAndCid", int.class, int.class)
                                 .invoke(fake, lac, cid);
-                        logSpoofed("TelephonyManager#getCellLocation");
+                        logSpoofed(module, "TelephonyManager#getCellLocation");
                         return fake;
                     } catch (Exception e) {
                         return chain.proceed();
@@ -301,9 +301,9 @@ public class SystemHookPlugin {
                 // getCellLocation may be absent on some API levels — safe to skip.
             }
 
-            Log.i(TAG, "hookAllCellInfo installed");
-        } catch (Exception e) {
-            Log.w(TAG, "hookAllCellInfo failed: " + e.getMessage());
+            module.log(Log.INFO, TAG, "hookAllCellInfo installed");
+        } catch (Throwable e) {
+            module.log(Log.WARN, TAG, "hookAllCellInfo failed: " + e);
         }
     }
 
@@ -322,7 +322,7 @@ public class SystemHookPlugin {
                 String val = getString(prefs, Constant.XFlag.LATITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
-                    logSpoofed("AMapLocation#getLatitude");
+                    logSpoofed(module, "AMapLocation#getLatitude");
                     return Double.parseDouble(val);
                 } catch (NumberFormatException e) {
                     return chain.proceed();
@@ -336,7 +336,7 @@ public class SystemHookPlugin {
                 String val = getString(prefs, Constant.XFlag.LONGITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
-                    logSpoofed("AMapLocation#getLongitude");
+                    logSpoofed(module, "AMapLocation#getLongitude");
                     return Double.parseDouble(val);
                 } catch (NumberFormatException e) {
                     return chain.proceed();
@@ -369,9 +369,9 @@ public class SystemHookPlugin {
                 }
             });
 
-            Log.i(TAG, "hookAMapLocation installed");
-        } catch (Exception e) {
-            Log.w(TAG, "hookAMapLocation failed: " + e.getMessage());
+            module.log(Log.INFO, TAG, "hookAMapLocation installed");
+        } catch (Throwable e) {
+            module.log(Log.WARN, TAG, "hookAMapLocation failed: " + e);
         }
     }
 }
