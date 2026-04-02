@@ -90,7 +90,7 @@ public class AlipayMapHookPlugin {
                 String val = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
-                    SystemHookPlugin.logSpoofed("LatLonPoint#getLatitude");
+                    SystemHookPlugin.logSpoofed(module, "LatLonPoint#getLatitude");
                     return Double.parseDouble(val);
                 } catch (NumberFormatException e) {
                     return chain.proceed();
@@ -104,7 +104,7 @@ public class AlipayMapHookPlugin {
                 String val = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
-                    SystemHookPlugin.logSpoofed("LatLonPoint#getLongitude");
+                    SystemHookPlugin.logSpoofed(module, "LatLonPoint#getLongitude");
                     return Double.parseDouble(val);
                 } catch (NumberFormatException e) {
                     return chain.proceed();
@@ -130,7 +130,7 @@ public class AlipayMapHookPlugin {
             module.hook(getFloor).intercept(chain -> {
                 SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
                 if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
-                SystemHookPlugin.logSpoofed("IndoorLocation#getFloor");
+                SystemHookPlugin.logSpoofed(module, "IndoorLocation#getFloor");
                 return DEFAULT_INDOOR_FLOOR;
             });
 
@@ -155,7 +155,7 @@ public class AlipayMapHookPlugin {
                 if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
                 String bssid = SystemHookPlugin.getString(prefs, Constant.XFlag.WIFI_BSSID);
                 if (bssid.isEmpty()) return chain.proceed();
-                SystemHookPlugin.logSpoofed("LBSWifiItemInfo#getBssid");
+                SystemHookPlugin.logSpoofed(module, "LBSWifiItemInfo#getBssid");
                 return bssid;
             });
 
@@ -165,7 +165,7 @@ public class AlipayMapHookPlugin {
                 if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
                 String ssid = SystemHookPlugin.getString(prefs, Constant.XFlag.WIFI_SSID);
                 if (ssid.isEmpty()) return chain.proceed();
-                SystemHookPlugin.logSpoofed("LBSWifiItemInfo#getSsid");
+                SystemHookPlugin.logSpoofed(module, "LBSWifiItemInfo#getSsid");
                 return ssid;
             });
 
@@ -173,7 +173,7 @@ public class AlipayMapHookPlugin {
             module.hook(getLevel).intercept(chain -> {
                 SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
                 if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
-                SystemHookPlugin.logSpoofed("LBSWifiItemInfo#getLevel");
+                SystemHookPlugin.logSpoofed(module, "LBSWifiItemInfo#getLevel");
                 return SPOOFED_WIFI_LEVEL;
             });
 
