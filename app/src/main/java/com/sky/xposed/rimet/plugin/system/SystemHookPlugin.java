@@ -16,6 +16,7 @@
 
 package com.sky.xposed.rimet.plugin.system;
 
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.wifi.SupplicantState;
 import android.util.Log;
@@ -35,19 +36,30 @@ import io.github.libxposed.api.XposedModule;
  * <p>Hooks Android framework APIs directly so the spoofing is version-agnostic
  * and works across any app without needing app-specific class-name mapping.</p>
  *
- * <p>Settings are read via {@link XposedModule#getRemotePreferences(String)} which
- * uses LibXposed's cross-process IPC (backed by {@code XposedProvider}) to safely
- * read the module UI's SharedPreferences from inside the hooked-app process.
- * A lightweight in-memory cache (2-second TTL) prevents IPC overhead on every
- * hooked call.</p>
+ * <p>Settings are read from two sources (in priority order):</p>
+ * <ol>
+ *   <li>The hooked app's own local SharedPreferences (written by the in-app
+ *       settings dialog, zero IPC overhead).  Used when {@link #sAppContext} is
+ *       set and the file already contains an {@code ENABLE_LOCATION} key.</li>
+ *   <li>The module's SharedPreferences via {@link XposedModule#getRemotePreferences}
+ *       (IPC-backed, written by the standalone {@code MainActivity}).  A 2-second
+ *       TTL cache minimises IPC overhead on every hooked call.</li>
+ * </ol>
  */
 public class SystemHookPlugin {
 
     private static final String TAG = "SystemHookPlugin";
 
+    /**
+     * DingTalk's Application context, set from {@code Main.java} once
+     * {@code Application.onCreate()} has finished.  Volatile so that writes
+     * from the main thread are immediately visible in hook threads.
+     */
+    static volatile Context sAppContext = null;
+
     // -----------------------------------------------------------------------
-    // Preference cache — refreshed at most once every PREFS_CACHE_TTL_MS.
-    // Access is synchronized to ensure thread-safe check-then-act.
+    // Remote-preference cache — refreshed at most once every PREFS_CACHE_TTL_MS.
+    // Access is synchronized to guard the check-then-act sequence.
     // -----------------------------------------------------------------------
     private static SharedPreferences sPrefsCache = null;
     private static long sPrefsLastRefreshMs = 0L;
@@ -79,11 +91,31 @@ public class SystemHookPlugin {
     // -----------------------------------------------------------------------
 
     /**
-     * Returns the module's SharedPreferences, refreshed via LibXposed IPC at most
-     * once per {@link #PREFS_CACHE_TTL_MS} to avoid per-call IPC overhead.
-     * Synchronized to guard the check-then-act against concurrent refreshes.
+     * Returns the SharedPreferences to use for location-spoof decisions.
+     *
+     * <p>Priority:
+     * <ol>
+     *   <li>The hooked app's own local SharedPreferences (populated by the
+     *       in-app location dialog, zero IPC, same process) — used when
+     *       {@link #sAppContext} is set <em>and</em> the file already has an
+     *       {@code ENABLE_LOCATION} entry (i.e. the user has saved settings
+     *       via the in-DingTalk dialog at least once).</li>
+     *   <li>Remote preferences from the module process (populated by the
+     *       standalone {@code MainActivity}), refreshed at most every
+     *       {@link #PREFS_CACHE_TTL_MS} ms.</li>
+     * </ol>
      */
     static synchronized SharedPreferences getPrefs(XposedModule module) {
+        // --- Primary: hooked-app local prefs (no IPC needed) ---
+        Context ctx = sAppContext;
+        if (ctx != null) {
+            SharedPreferences local = ctx.getSharedPreferences(
+                    Constant.Name.RIMET, Context.MODE_PRIVATE);
+            if (local.contains(Integer.toString(Constant.XFlag.ENABLE_LOCATION))) {
+                return local;
+            }
+        }
+        // --- Secondary: module-process prefs via XposedProvider (IPC) ---
         long now = System.currentTimeMillis();
         if (sPrefsCache == null || (now - sPrefsLastRefreshMs) > PREFS_CACHE_TTL_MS) {
             sPrefsCache = module.getRemotePreferences(Constant.Name.RIMET);
