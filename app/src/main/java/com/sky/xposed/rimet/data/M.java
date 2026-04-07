@@ -50,6 +50,8 @@ public final class M {
         public static final int class_android_dingtalk_redpackets_activities_PickRedPacketsActivity = 0x1f00000B;
 
         public static final int class_android_user_settings_activity_NewSettingActivity = 0x1f00000C;
+
+        public static final int class_android_user_settings_activity_UserSettingsActivity = 0x1f00000D;
     }
 
     public static final class method {
@@ -77,6 +79,8 @@ public final class M {
         public static final int method_android_dingtalk_redpackets_activities_PickRedPacketsActivity_initView = 0x2f00000B;
 
         public static final int method_android_user_settings_activity_NewSettingActivity_onCreate = 0x2f00000C;
+
+        public static final int method_android_user_settings_activity_UserSettingsActivity_onCreate = 0x2f00000D;
     }
 
     public static final class field {
