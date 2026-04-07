@@ -81,6 +81,10 @@ public interface Constant {
         int CELL_ID = 0x00000C;
 
         int WIFI_MAC = 0x00000D;
+
+        int CELL_MCC = 0x00000E;
+
+        int CELL_MNC = 0x00000F;
     }
 
     interface Preference {

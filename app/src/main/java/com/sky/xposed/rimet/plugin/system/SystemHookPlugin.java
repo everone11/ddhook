@@ -280,6 +280,7 @@ public class SystemHookPlugin {
                 }
             });
 
+            module.log(Log.INFO, TAG, "hookGsmCellLocation installed");
         } catch (Throwable e) {
             module.log(Log.WARN, TAG, "hookGsmCellLocation failed", e);
         }
@@ -363,6 +364,39 @@ public class SystemHookPlugin {
                 });
             } catch (Exception ignored) {
                 // getCellLocation may be absent on some API levels — safe to skip.
+            }
+
+            // getNetworkOperator() / getSimOperator() — return "{mcc}{mnc}" (e.g. "46000")
+            // so that apps that validate the carrier identity before trusting cell data see
+            // a consistent spoofed network.  Only active when both MCC and MNC are configured.
+            try {
+                Method getNetworkOperator = cls.getMethod("getNetworkOperator");
+                module.hook(getNetworkOperator).intercept(chain -> {
+                    SharedPreferences prefs = getPrefs(module);
+                    if (!isEnabled(prefs)) return chain.proceed();
+                    String mcc = getString(prefs, Constant.XFlag.CELL_MCC);
+                    String mnc = getString(prefs, Constant.XFlag.CELL_MNC);
+                    if (mcc.isEmpty() || mnc.isEmpty()) return chain.proceed();
+                    logSpoofed(module, "TelephonyManager#getNetworkOperator");
+                    return mcc + mnc;
+                });
+            } catch (Exception ignored) {
+                // Absent on some devices — safe to skip.
+            }
+
+            try {
+                Method getSimOperator = cls.getMethod("getSimOperator");
+                module.hook(getSimOperator).intercept(chain -> {
+                    SharedPreferences prefs = getPrefs(module);
+                    if (!isEnabled(prefs)) return chain.proceed();
+                    String mcc = getString(prefs, Constant.XFlag.CELL_MCC);
+                    String mnc = getString(prefs, Constant.XFlag.CELL_MNC);
+                    if (mcc.isEmpty() || mnc.isEmpty()) return chain.proceed();
+                    logSpoofed(module, "TelephonyManager#getSimOperator");
+                    return mcc + mnc;
+                });
+            } catch (Exception ignored) {
+                // Absent on some devices — safe to skip.
             }
 
             module.log(Log.INFO, TAG, "hookAllCellInfo installed");
