@@ -17,6 +17,7 @@
 package com.sky.xposed.rimet.plugin.system;
 
 import android.content.SharedPreferences;
+import android.net.wifi.SupplicantState;
 import android.util.Log;
 
 import com.sky.xposed.rimet.Constant;
@@ -65,7 +66,7 @@ public class SystemHookPlugin {
      */
     public static void setup(XposedModule module) {
         hookLocation(module);
-        hookAMapLocation(module);
+        hookLocationManager(module);
         hookWifiInfo(module);
         hookWifiScanResults(module);
         hookGsmCellLocation(module);
@@ -152,6 +153,37 @@ public class SystemHookPlugin {
     }
 
     // -----------------------------------------------------------------------
+    // LocationManager hooks
+    // -----------------------------------------------------------------------
+
+    private static void hookLocationManager(XposedModule module) {
+        try {
+            Class<?> cls = Class.forName("android.location.LocationManager");
+
+            // isProviderEnabled(String) — return true for GPS/network when spoofing is active
+            // so that AMap SDK and the system start location updates.
+            Method isProviderEnabled = cls.getMethod("isProviderEnabled", String.class);
+            module.hook(isProviderEnabled).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
+                if (!isEnabled(prefs)) return chain.proceed();
+                // Only activate if the user has set a latitude to spoof.
+                String lat = getString(prefs, Constant.XFlag.LATITUDE);
+                if (lat.isEmpty()) return chain.proceed();
+                String provider = (String) chain.getArg(0);
+                if ("gps".equals(provider) || "network".equals(provider)) {
+                    logSpoofed(module, "LocationManager#isProviderEnabled");
+                    return true;
+                }
+                return chain.proceed();
+            });
+
+            module.log(Log.INFO, TAG, "hookLocationManager installed");
+        } catch (Throwable e) {
+            module.log(Log.WARN, TAG, "hookLocationManager failed", e);
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // WiFi hooks
     // -----------------------------------------------------------------------
 
@@ -190,6 +222,28 @@ public class SystemHookPlugin {
                 return mac;
             });
 
+            // getNetworkId() — return a valid (non-negative) ID so apps don't treat WiFi
+            // as disconnected.  Apps typically check getNetworkId() != -1 before reading SSID.
+            Method getNetworkId = cls.getMethod("getNetworkId");
+            module.hook(getNetworkId).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
+                if (!isEnabled(prefs)) return chain.proceed();
+                String ssid = getString(prefs, Constant.XFlag.WIFI_SSID);
+                if (ssid.isEmpty()) return chain.proceed();
+                return 1;
+            });
+
+            // getSupplicantState() — return COMPLETED so apps see a fully-associated WiFi.
+            Method getSupplicantState = cls.getMethod("getSupplicantState");
+            module.hook(getSupplicantState).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
+                if (!isEnabled(prefs)) return chain.proceed();
+                String ssid = getString(prefs, Constant.XFlag.WIFI_SSID);
+                if (ssid.isEmpty()) return chain.proceed();
+                return SupplicantState.COMPLETED;
+            });
+
+            module.log(Log.INFO, TAG, "hookWifiInfo installed");
         } catch (Throwable e) {
             module.log(Log.WARN, TAG, "hookWifiInfo failed", e);
         }
@@ -234,6 +288,16 @@ public class SystemHookPlugin {
     private static void hookWifiScanResults(XposedModule module) {
         try {
             Class<?> cls = Class.forName("android.net.wifi.WifiManager");
+
+            // isWifiEnabled() — return true so apps don't bail out before reading connection info.
+            Method isWifiEnabled = cls.getMethod("isWifiEnabled");
+            module.hook(isWifiEnabled).intercept(chain -> {
+                SharedPreferences prefs = getPrefs(module);
+                if (!isEnabled(prefs)) return chain.proceed();
+                String ssid = getString(prefs, Constant.XFlag.WIFI_SSID);
+                if (ssid.isEmpty()) return chain.proceed();
+                return true;
+            });
 
             Method getScanResults = cls.getMethod("getScanResults");
             module.hook(getScanResults).intercept(chain -> {
@@ -307,71 +371,4 @@ public class SystemHookPlugin {
         }
     }
 
-    // -----------------------------------------------------------------------
-    // AMap SDK location hook
-    // -----------------------------------------------------------------------
-
-    private static void hookAMapLocation(XposedModule module) {
-        try {
-            Class<?> cls = Class.forName("com.amap.api.location.AMapLocation");
-
-            Method getLatitude = cls.getMethod("getLatitude");
-            module.hook(getLatitude).intercept(chain -> {
-                SharedPreferences prefs = getPrefs(module);
-                if (!isEnabled(prefs)) return chain.proceed();
-                String val = getString(prefs, Constant.XFlag.LATITUDE);
-                if (val.isEmpty()) return chain.proceed();
-                try {
-                    logSpoofed(module, "AMapLocation#getLatitude");
-                    return Double.parseDouble(val);
-                } catch (NumberFormatException e) {
-                    return chain.proceed();
-                }
-            });
-
-            Method getLongitude = cls.getMethod("getLongitude");
-            module.hook(getLongitude).intercept(chain -> {
-                SharedPreferences prefs = getPrefs(module);
-                if (!isEnabled(prefs)) return chain.proceed();
-                String val = getString(prefs, Constant.XFlag.LONGITUDE);
-                if (val.isEmpty()) return chain.proceed();
-                try {
-                    logSpoofed(module, "AMapLocation#getLongitude");
-                    return Double.parseDouble(val);
-                } catch (NumberFormatException e) {
-                    return chain.proceed();
-                }
-            });
-
-            Method setLatitude = cls.getMethod("setLatitude", double.class);
-            module.hook(setLatitude).intercept(chain -> {
-                SharedPreferences prefs = getPrefs(module);
-                if (!isEnabled(prefs)) return chain.proceed();
-                String val = getString(prefs, Constant.XFlag.LATITUDE);
-                if (val.isEmpty()) return chain.proceed();
-                try {
-                    return chain.proceed(new Object[]{Double.parseDouble(val)});
-                } catch (NumberFormatException e) {
-                    return chain.proceed();
-                }
-            });
-
-            Method setLongitude = cls.getMethod("setLongitude", double.class);
-            module.hook(setLongitude).intercept(chain -> {
-                SharedPreferences prefs = getPrefs(module);
-                if (!isEnabled(prefs)) return chain.proceed();
-                String val = getString(prefs, Constant.XFlag.LONGITUDE);
-                if (val.isEmpty()) return chain.proceed();
-                try {
-                    return chain.proceed(new Object[]{Double.parseDouble(val)});
-                } catch (NumberFormatException e) {
-                    return chain.proceed();
-                }
-            });
-
-            module.log(Log.INFO, TAG, "hookAMapLocation installed");
-        } catch (Throwable e) {
-            module.log(Log.WARN, TAG, "hookAMapLocation failed", e);
-        }
-    }
 }

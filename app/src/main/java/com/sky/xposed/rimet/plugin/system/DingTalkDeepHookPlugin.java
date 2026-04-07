@@ -61,6 +61,7 @@ public class DingTalkDeepHookPlugin {
     public static void setup(XposedModule module, ClassLoader classLoader) {
         hookGMapLocation(module, classLoader);
         hookLocationProxy(module, classLoader);
+        hookAMapLocationClient(module, classLoader);
         hookAopWifiManager(module, classLoader);
         module.log(Log.INFO, TAG, "DingTalk deep hooks installed");
     }
@@ -184,6 +185,142 @@ public class DingTalkDeepHookPlugin {
             module.log(Log.INFO, TAG, "hookLocationProxy installed");
         } catch (Throwable e) {
             module.log(Log.WARN, TAG, "hookLocationProxy failed", e);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // AMapLocationClient — intercepts location at the AMap SDK layer
+    // -----------------------------------------------------------------------
+
+    private static void hookAMapLocationClient(XposedModule module, ClassLoader classLoader) {
+        try {
+            Class<?> aMapLocationCls = classLoader.loadClass(
+                    "com.amap.api.location.AMapLocation");
+            Class<?> clientCls = classLoader.loadClass(
+                    "com.amap.api.location.AMapLocationClient");
+            Class<?> listenerCls = classLoader.loadClass(
+                    "com.amap.api.location.AMapLocationListener");
+
+            final Method setLatMethod = aMapLocationCls.getMethod("setLatitude", double.class);
+            final Method setLonMethod = aMapLocationCls.getMethod("setLongitude", double.class);
+
+            // getLastKnownLocation() — return null to invalidate the cached real location,
+            // forcing the app to rely on the live listener path where our hooks are active.
+            try {
+                Method getLastKnownLocation = clientCls.getMethod("getLastKnownLocation");
+                module.hook(getLastKnownLocation).intercept(chain -> {
+                    SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
+                    if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
+                    String lat = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
+                    if (lat.isEmpty()) return chain.proceed();
+                    SystemHookPlugin.logSpoofed(module, "AMapLocationClient#getLastKnownLocation");
+                    return null;
+                });
+                module.log(Log.INFO, TAG, "hookAMapLocationClient#getLastKnownLocation installed");
+            } catch (Throwable e) {
+                module.log(Log.WARN, TAG, "hookAMapLocationClient#getLastKnownLocation failed", e);
+            }
+
+            // AMapLocation.getLatitude/getLongitude — hook getters directly using the app
+            // classloader (SystemHookPlugin.hookAMapLocation used the wrong classloader and
+            // always failed with ClassNotFoundException).
+            try {
+                Method getLatitude = aMapLocationCls.getMethod("getLatitude");
+                module.hook(getLatitude).intercept(chain -> {
+                    SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
+                    if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
+                    String val = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
+                    if (val.isEmpty()) return chain.proceed();
+                    try {
+                        SystemHookPlugin.logSpoofed(module, "AMapLocation#getLatitude");
+                        return Double.parseDouble(val);
+                    } catch (NumberFormatException e) {
+                        return chain.proceed();
+                    }
+                });
+
+                Method getLongitude = aMapLocationCls.getMethod("getLongitude");
+                module.hook(getLongitude).intercept(chain -> {
+                    SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
+                    if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
+                    String val = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
+                    if (val.isEmpty()) return chain.proceed();
+                    try {
+                        SystemHookPlugin.logSpoofed(module, "AMapLocation#getLongitude");
+                        return Double.parseDouble(val);
+                    } catch (NumberFormatException e) {
+                        return chain.proceed();
+                    }
+                });
+                module.log(Log.INFO, TAG, "hookAMapLocation getters installed");
+            } catch (Throwable e) {
+                module.log(Log.WARN, TAG, "hookAMapLocation getters failed", e);
+            }
+
+            // setLocationListener(AMapLocationListener) — wrap the real listener in a proxy
+            // so that every onLocationChanged callback has its coordinates replaced before
+            // the DingTalk code sees them.  This is the SDK-level analogue of the legacy
+            // xposed-rimet AMapLocationListenerProxy approach.
+            try {
+                Method setLocationListener = clientCls.getMethod(
+                        "setLocationListener", listenerCls);
+                module.hook(setLocationListener).intercept(chain -> {
+                    SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
+                    if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
+                    String lat = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
+                    if (lat.isEmpty()) return chain.proceed();
+
+                    Object realListener = chain.getArg(0);
+                    if (realListener == null) return chain.proceed();
+                    // Avoid double-wrapping if already proxied.
+                    if (java.lang.reflect.Proxy.isProxyClass(realListener.getClass())) {
+                        return chain.proceed();
+                    }
+
+                    Object proxyListener = java.lang.reflect.Proxy.newProxyInstance(
+                            classLoader,
+                            new Class[]{listenerCls},
+                            (proxy, method, args) -> {
+                                if ("onLocationChanged".equals(method.getName())
+                                        && args != null && args.length == 1
+                                        && args[0] != null) {
+                                    SharedPreferences p = SystemHookPlugin.getPrefs(module);
+                                    if (SystemHookPlugin.isEnabled(p)) {
+                                        String latStr = SystemHookPlugin.getString(
+                                                p, Constant.XFlag.LATITUDE);
+                                        String lonStr = SystemHookPlugin.getString(
+                                                p, Constant.XFlag.LONGITUDE);
+                                        try {
+                                            if (!latStr.isEmpty()) {
+                                                setLatMethod.invoke(
+                                                        args[0], Double.parseDouble(latStr));
+                                            }
+                                            if (!lonStr.isEmpty()) {
+                                                setLonMethod.invoke(
+                                                        args[0], Double.parseDouble(lonStr));
+                                            }
+                                            SystemHookPlugin.logSpoofed(module,
+                                                    "AMapLocationListener#onLocationChanged");
+                                        } catch (Exception e) {
+                                            module.log(Log.WARN, TAG,
+                                                    "AMapLocationListener proxy patch failed", e);
+                                        }
+                                    }
+                                }
+                                return method.invoke(realListener, args);
+                            });
+
+                    return chain.proceed(new Object[]{proxyListener});
+                });
+                module.log(Log.INFO, TAG,
+                        "hookAMapLocationClient#setLocationListener installed");
+            } catch (Throwable e) {
+                module.log(Log.WARN, TAG,
+                        "hookAMapLocationClient#setLocationListener failed", e);
+            }
+
+        } catch (Throwable e) {
+            module.log(Log.WARN, TAG, "hookAMapLocationClient setup failed", e);
         }
     }
 
