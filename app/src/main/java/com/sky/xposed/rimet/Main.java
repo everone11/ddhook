@@ -97,7 +97,16 @@ public class Main extends XposedModule {
                 } catch (Throwable t) {
                     log(Log.WARN, TAG, "DingTalkDeepHookPlugin.setup failed", t);
                 }
-                return chain.proceed();
+                Object result = chain.proceed();
+                // Store the app context so hooks can read local prefs directly
+                // (populated by the in-DingTalk location dialog, no IPC required).
+                try {
+                    Application app = (Application) chain.getThisObject();
+                    SystemHookPlugin.sAppContext = app.getApplicationContext();
+                } catch (Throwable t) {
+                    log(Log.WARN, TAG, "Failed to store DingTalk app context", t);
+                }
+                return result;
             });
             log(Log.INFO, TAG, "Application.onCreate hooked for DingTalk deep hooks");
         } catch (Throwable t) {
