@@ -543,6 +543,108 @@
                     android:layout_marginStart="16dp"
                     android:background="@color/colorDivider" />
 
+                <!-- Cell LAC -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="64dp"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/feature_cell_lac"
+                        android:textSize="15sp"
+                        android:textColor="@color/colorItemText" />
+
+                    <EditText
+                        android:id="@+id/et_cell_lac"
+                        android:layout_width="120dp"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:hint="@string/feature_cell_lac_hint"
+                        android:gravity="end"
+                        android:textSize="14sp" />
+
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="0.5dp"
+                    android:layout_marginStart="16dp"
+                    android:background="@color/colorDivider" />
+
+                <!-- MCC -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="64dp"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/feature_cell_mcc"
+                        android:textSize="15sp"
+                        android:textColor="@color/colorItemText" />
+
+                    <EditText
+                        android:id="@+id/et_cell_mcc"
+                        android:layout_width="120dp"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:hint="@string/feature_cell_mcc_hint"
+                        android:gravity="end"
+                        android:textSize="14sp" />
+
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="0.5dp"
+                    android:layout_marginStart="16dp"
+                    android:background="@color/colorDivider" />
+
+                <!-- MNC -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="64dp"
+                    android:orientation="horizontal"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/feature_cell_mnc"
+                        android:textSize="15sp"
+                        android:textColor="@color/colorItemText" />
+
+                    <EditText
+                        android:id="@+id/et_cell_mnc"
+                        android:layout_width="120dp"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:hint="@string/feature_cell_mnc_hint"
+                        android:gravity="end"
+                        android:textSize="14sp" />
+
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="0.5dp"
+                    android:layout_marginStart="16dp"
+                    android:background="@color/colorDivider" />
+
                 <!-- MAC Address -->
                 <LinearLayout
                     android:layout_width="match_parent"

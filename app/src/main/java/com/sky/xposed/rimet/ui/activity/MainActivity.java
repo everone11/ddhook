@@ -61,6 +61,9 @@ public class MainActivity extends AppCompatActivity {
     private EditText mEtLongitude;
     private EditText mEtWifiSsid;
     private EditText mEtCellId;
+    private EditText mEtCellLac;
+    private EditText mEtCellMcc;
+    private EditText mEtCellMnc;
     private EditText mEtWifiMac;
 
     @Override
@@ -168,6 +171,9 @@ public class MainActivity extends AppCompatActivity {
         mEtLongitude = findViewById(R.id.et_longitude);
         mEtWifiSsid = findViewById(R.id.et_wifi_ssid);
         mEtCellId = findViewById(R.id.et_cell_id);
+        mEtCellLac = findViewById(R.id.et_cell_lac);
+        mEtCellMcc = findViewById(R.id.et_cell_mcc);
+        mEtCellMnc = findViewById(R.id.et_cell_mnc);
         mEtWifiMac = findViewById(R.id.et_wifi_mac);
 
         // Load saved values
@@ -181,6 +187,12 @@ public class MainActivity extends AppCompatActivity {
                 Integer.toString(Constant.XFlag.WIFI_SSID), ""));
         mEtCellId.setText(mPreferences.getString(
                 Integer.toString(Constant.XFlag.CELL_ID), ""));
+        mEtCellLac.setText(mPreferences.getString(
+                Integer.toString(Constant.XFlag.CELL_LAC), ""));
+        mEtCellMcc.setText(mPreferences.getString(
+                Integer.toString(Constant.XFlag.CELL_MCC), ""));
+        mEtCellMnc.setText(mPreferences.getString(
+                Integer.toString(Constant.XFlag.CELL_MNC), ""));
         mEtWifiMac.setText(mPreferences.getString(
                 Integer.toString(Constant.XFlag.WIFI_MAC), ""));
 
@@ -230,6 +242,39 @@ public class MainActivity extends AppCompatActivity {
             public void afterTextChanged(Editable s) {
                 mPreferences.edit()
                         .putString(Integer.toString(Constant.XFlag.CELL_ID), s.toString())
+                        .apply();
+            }
+        });
+
+        mEtCellLac.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                mPreferences.edit()
+                        .putString(Integer.toString(Constant.XFlag.CELL_LAC), s.toString())
+                        .apply();
+            }
+        });
+
+        mEtCellMcc.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                mPreferences.edit()
+                        .putString(Integer.toString(Constant.XFlag.CELL_MCC), s.toString())
+                        .apply();
+            }
+        });
+
+        mEtCellMnc.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                mPreferences.edit()
+                        .putString(Integer.toString(Constant.XFlag.CELL_MNC), s.toString())
                         .apply();
             }
         });

@@ -38,6 +38,12 @@
     <string name="feature_wifi_ssid_hint">例如: MyWiFi</string>
     <string name="feature_cell_id">基站 ID (Cell ID)</string>
     <string name="feature_cell_id_hint">例如: 12345</string>
+    <string name="feature_cell_lac">基站 LAC</string>
+    <string name="feature_cell_lac_hint">例如: 1234</string>
+    <string name="feature_cell_mcc">移动国家码 (MCC)</string>
+    <string name="feature_cell_mcc_hint">例如: 460</string>
+    <string name="feature_cell_mnc">移动网络码 (MNC)</string>
+    <string name="feature_cell_mnc_hint">例如: 00</string>
     <string name="feature_wifi_mac">MAC 地址</string>
     <string name="feature_wifi_mac_hint">例如: AA:BB:CC:DD:EE:FF</string>
 
