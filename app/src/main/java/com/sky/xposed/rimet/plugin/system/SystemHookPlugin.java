@@ -55,7 +55,7 @@ public class SystemHookPlugin {
      * {@code Application.onCreate()} has finished.  Volatile so that writes
      * from the main thread are immediately visible in hook threads.
      */
-    static volatile Context sAppContext = null;
+    public static volatile Context sAppContext = null;
 
     // -----------------------------------------------------------------------
     // Remote-preference cache — refreshed at most once every PREFS_CACHE_TTL_MS.
