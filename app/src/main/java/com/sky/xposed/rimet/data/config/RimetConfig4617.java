@@ -41,6 +41,7 @@ public class RimetConfig4617 extends RimetConfig {
         add(M.classz.class_android_dingtalk_redpackets_activities_FestivalRedPacketsPickActivity, "com.alibaba.android.dingtalk.redpackets.activities.FestivalRedPacketsPickActivity");
         add(M.classz.class_android_dingtalk_redpackets_activities_PickRedPacketsActivity, "com.alibaba.android.dingtalk.redpackets.activities.PickRedPacketsActivity");
         add(M.classz.class_android_user_settings_activity_NewSettingActivity, "com.alibaba.android.user.settings.activity.NewSettingActivity");
+        add(M.classz.class_android_user_settings_activity_UserSettingsActivity, "com.alibaba.android.user.settings.activity.UserSettingsActivity");
 
         /** Method */
         add(M.method.method_dingtalkbase_multidexsupport_DDApplication_onCreate, "onCreate");
@@ -55,6 +56,7 @@ public class RimetConfig4617 extends RimetConfig {
         add(M.method.method_android_dingtalk_redpackets_activities_FestivalRedPacketsPickActivity_initView, "a");
         add(M.method.method_android_dingtalk_redpackets_activities_PickRedPacketsActivity_initView, "a");
         add(M.method.method_android_user_settings_activity_NewSettingActivity_onCreate, "onCreate");
+        add(M.method.method_android_user_settings_activity_UserSettingsActivity_onCreate, "onCreate");
 
         /** Field */
         add(M.field.field_wukong_im_message_MessageContentImpl_mType, "mType");
