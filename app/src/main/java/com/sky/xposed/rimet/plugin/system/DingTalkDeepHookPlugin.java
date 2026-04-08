@@ -107,7 +107,12 @@ public class DingTalkDeepHookPlugin {
                 if (val.isEmpty()) return chain.proceed();
                 try {
                     SystemHookPlugin.logSpoofed(module, "GMapLocation#getLatitude");
-                    return Double.parseDouble(val);
+                    double baseLat = Double.parseDouble(val);
+                    String lonVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
+                    String offVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
+                    if (lonVal.isEmpty() || offVal.isEmpty()) return baseLat;
+                    return SystemHookPlugin.getEffectiveCoords(
+                            baseLat, Double.parseDouble(lonVal), Double.parseDouble(offVal))[0];
                 } catch (NumberFormatException e) {
                     return chain.proceed();
                 }
@@ -121,7 +126,12 @@ public class DingTalkDeepHookPlugin {
                 if (val.isEmpty()) return chain.proceed();
                 try {
                     SystemHookPlugin.logSpoofed(module, "GMapLocation#getLongitude");
-                    return Double.parseDouble(val);
+                    double baseLon = Double.parseDouble(val);
+                    String latVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
+                    String offVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
+                    if (latVal.isEmpty() || offVal.isEmpty()) return baseLon;
+                    return SystemHookPlugin.getEffectiveCoords(
+                            Double.parseDouble(latVal), baseLon, Double.parseDouble(offVal))[1];
                 } catch (NumberFormatException e) {
                     return chain.proceed();
                 }
@@ -134,7 +144,13 @@ public class DingTalkDeepHookPlugin {
                 String val = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
-                    return chain.proceed(new Object[]{Double.parseDouble(val)});
+                    double baseLat = Double.parseDouble(val);
+                    String lonVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
+                    String offVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
+                    if (lonVal.isEmpty() || offVal.isEmpty()) return chain.proceed(new Object[]{baseLat});
+                    double effectiveLat = SystemHookPlugin.getEffectiveCoords(
+                            baseLat, Double.parseDouble(lonVal), Double.parseDouble(offVal))[0];
+                    return chain.proceed(new Object[]{effectiveLat});
                 } catch (NumberFormatException e) {
                     return chain.proceed();
                 }
@@ -147,7 +163,13 @@ public class DingTalkDeepHookPlugin {
                 String val = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
-                    return chain.proceed(new Object[]{Double.parseDouble(val)});
+                    double baseLon = Double.parseDouble(val);
+                    String latVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
+                    String offVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
+                    if (latVal.isEmpty() || offVal.isEmpty()) return chain.proceed(new Object[]{baseLon});
+                    double effectiveLon = SystemHookPlugin.getEffectiveCoords(
+                            Double.parseDouble(latVal), baseLon, Double.parseDouble(offVal))[1];
+                    return chain.proceed(new Object[]{effectiveLon});
                 } catch (NumberFormatException e) {
                     return chain.proceed();
                 }
@@ -184,17 +206,26 @@ public class DingTalkDeepHookPlugin {
                 Object aMapLocation = chain.getArg(0);
                 if (aMapLocation == null) return chain.proceed();
 
-                // Apply lat/lon overrides independently (consistent with getter hooks).
+                // Apply lat/lon overrides with random offset.
                 String latStr = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
                 String lonStr = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
+                String offStr = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
                 boolean patched = false;
                 try {
+                    double[] coords = null;
+                    if (!latStr.isEmpty() && !lonStr.isEmpty() && !offStr.isEmpty()) {
+                        coords = SystemHookPlugin.getEffectiveCoords(
+                                Double.parseDouble(latStr), Double.parseDouble(lonStr),
+                                Double.parseDouble(offStr));
+                    }
                     if (!latStr.isEmpty()) {
-                        setLat.invoke(aMapLocation, Double.parseDouble(latStr));
+                        double lat = (coords != null) ? coords[0] : Double.parseDouble(latStr);
+                        setLat.invoke(aMapLocation, lat);
                         patched = true;
                     }
                     if (!lonStr.isEmpty()) {
-                        setLon.invoke(aMapLocation, Double.parseDouble(lonStr));
+                        double lon = (coords != null) ? coords[1] : Double.parseDouble(lonStr);
+                        setLon.invoke(aMapLocation, lon);
                         patched = true;
                     }
                 } catch (Exception ignored) {
@@ -276,7 +307,12 @@ public class DingTalkDeepHookPlugin {
                     if (val.isEmpty()) return chain.proceed();
                     try {
                         SystemHookPlugin.logSpoofed(module, "AMapLocation#getLatitude");
-                        return Double.parseDouble(val);
+                        double baseLat = Double.parseDouble(val);
+                        String lonVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
+                        String offVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
+                        if (lonVal.isEmpty() || offVal.isEmpty()) return baseLat;
+                        return SystemHookPlugin.getEffectiveCoords(
+                                baseLat, Double.parseDouble(lonVal), Double.parseDouble(offVal))[0];
                     } catch (NumberFormatException e) {
                         return chain.proceed();
                     }
@@ -290,7 +326,12 @@ public class DingTalkDeepHookPlugin {
                     if (val.isEmpty()) return chain.proceed();
                     try {
                         SystemHookPlugin.logSpoofed(module, "AMapLocation#getLongitude");
-                        return Double.parseDouble(val);
+                        double baseLon = Double.parseDouble(val);
+                        String latVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
+                        String offVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
+                        if (latVal.isEmpty() || offVal.isEmpty()) return baseLon;
+                        return SystemHookPlugin.getEffectiveCoords(
+                                Double.parseDouble(latVal), baseLon, Double.parseDouble(offVal))[1];
                     } catch (NumberFormatException e) {
                         return chain.proceed();
                     }
@@ -333,14 +374,26 @@ public class DingTalkDeepHookPlugin {
                                                 p, Constant.XFlag.LATITUDE);
                                         String lonStr = SystemHookPlugin.getString(
                                                 p, Constant.XFlag.LONGITUDE);
+                                        String offStr = SystemHookPlugin.getString(
+                                                p, Constant.XFlag.LOCATION_OFFSET);
                                         try {
+                                            double[] coords = null;
+                                            if (!latStr.isEmpty() && !lonStr.isEmpty()
+                                                    && !offStr.isEmpty()) {
+                                                coords = SystemHookPlugin.getEffectiveCoords(
+                                                        Double.parseDouble(latStr),
+                                                        Double.parseDouble(lonStr),
+                                                        Double.parseDouble(offStr));
+                                            }
                                             if (!latStr.isEmpty()) {
-                                                setLatMethod.invoke(
-                                                        args[0], Double.parseDouble(latStr));
+                                                double lat = (coords != null)
+                                                        ? coords[0] : Double.parseDouble(latStr);
+                                                setLatMethod.invoke(args[0], lat);
                                             }
                                             if (!lonStr.isEmpty()) {
-                                                setLonMethod.invoke(
-                                                        args[0], Double.parseDouble(lonStr));
+                                                double lon = (coords != null)
+                                                        ? coords[1] : Double.parseDouble(lonStr);
+                                                setLonMethod.invoke(args[0], lon);
                                             }
                                             SystemHookPlugin.logSpoofed(module,
                                                     "AMapLocationListener#onLocationChanged");
