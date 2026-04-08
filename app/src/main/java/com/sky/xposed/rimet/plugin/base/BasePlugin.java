@@ -19,15 +19,12 @@ package com.sky.xposed.rimet.plugin.base;
 import android.app.Activity;
 import android.content.Context;
 import android.util.Log;
-import android.widget.Toast;
 
 import com.sky.xposed.rimet.plugin.interfaces.XConfig;
 import com.sky.xposed.rimet.plugin.interfaces.XConfigManager;
 import com.sky.xposed.rimet.plugin.interfaces.XPlugin;
 import com.sky.xposed.rimet.plugin.interfaces.XPluginManager;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 import io.github.libxposed.api.XposedInterface;
@@ -105,16 +102,8 @@ public abstract class BasePlugin implements XPlugin {
         return mClassLoader;
     }
 
-    public XposedInterface getXposedInterface() {
-        return mXposedInterface;
-    }
-
     public String getXString(int key) {
         return getXConfig().get(key);
-    }
-
-    public boolean hasXString(int key) {
-        return getXConfig().has(key);
     }
 
     // -----------------------------------------------------------------------
@@ -154,31 +143,6 @@ public abstract class BasePlugin implements XPlugin {
         }
     }
 
-    protected HookHelper findConstructor(String className, Object... parameterTypes) {
-        try {
-            Class<?> clazz = mClassLoader.loadClass(className);
-            return findConstructor(clazz, parameterTypes);
-        } catch (ClassNotFoundException e) {
-            Log.w(TAG, "Class not found: " + className);
-            return HookHelper.EMPTY;
-        }
-    }
-
-    protected HookHelper findConstructor(Class<?> clazz, Object... parameterTypes) {
-        try {
-            Class<?>[] params = resolveParamTypes(parameterTypes);
-            Constructor<?> ctor = clazz.getDeclaredConstructor(params);
-            ctor.setAccessible(true);
-            return new HookHelper(ctor, mXposedInterface);
-        } catch (NoSuchMethodException e) {
-            Log.w(TAG, "Constructor not found: " + clazz.getName());
-            return HookHelper.EMPTY;
-        } catch (Exception e) {
-            Log.e(TAG, "findConstructor error", e);
-            return HookHelper.EMPTY;
-        }
-    }
-
     /**
      * Resolve Object[] varargs (may contain Class<?> or String) to Class<?>[].
      */
@@ -198,51 +162,6 @@ public abstract class BasePlugin implements XPlugin {
             }
         }
         return params;
-    }
-
-    // -----------------------------------------------------------------------
-    // Reflection helpers for field and method access in hooked app code.
-    // -----------------------------------------------------------------------
-
-    public Object getObjectField(Object obj, String fieldName) {
-        try {
-            Field field = findFieldInHierarchy(obj.getClass(), fieldName);
-            field.setAccessible(true);
-            return field.get(obj);
-        } catch (Exception e) {
-            Log.e(TAG, "getObjectField(" + fieldName + ") failed", e);
-            return null;
-        }
-    }
-
-    public Object getObjectField(Object obj, int fieldKey) {
-        return getObjectField(obj, getXString(fieldKey));
-    }
-
-    public int getIntField(Object obj, String fieldName) {
-        Object value = getObjectField(obj, fieldName);
-        return value instanceof Integer ? (Integer) value : 0;
-    }
-
-    public int getIntField(Object obj, int fieldKey) {
-        return getIntField(obj, getXString(fieldKey));
-    }
-
-    private static Field findFieldInHierarchy(Class<?> clazz, String fieldName)
-            throws NoSuchFieldException {
-        while (clazz != null) {
-            try {
-                return clazz.getDeclaredField(fieldName);
-            } catch (NoSuchFieldException ignored) {
-                clazz = clazz.getSuperclass();
-            }
-        }
-        throw new NoSuchFieldException(fieldName);
-    }
-
-    public void showMessage(final String msg) {
-        mPluginManager.getHandler().post(() ->
-                Toast.makeText(getContext(), msg, Toast.LENGTH_SHORT).show());
     }
 
     // -----------------------------------------------------------------------

@@ -57,10 +57,6 @@ public class Main extends XposedModule {
 
     private static final String TAG = "ddhook";
 
-    public Main() {
-        super();
-    }
-
     /**
      * Called when our module itself is loaded (process-level init).
      */

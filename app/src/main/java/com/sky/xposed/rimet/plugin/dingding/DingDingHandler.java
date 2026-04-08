@@ -49,14 +49,12 @@ public class DingDingHandler extends BaseHandler implements DingDingPlugin.Handl
     private XConfigManager mXConfigManager;
     private boolean mEnableLucky;
     private boolean mEnableFastLucky;
-    private boolean mEnableRecall;
 
     public DingDingHandler(XPluginManager pluginManager) {
         super(pluginManager);
         mXConfigManager = getPluginManager().getConfigManager();
         mEnableLucky = mXConfigManager.getBoolean(Constant.XFlag.ENABLE_LUCKY, true);
         mEnableFastLucky = mXConfigManager.getBoolean(Constant.XFlag.ENABLE_FAST_LUCKY, true);
-        mEnableRecall = mXConfigManager.getBoolean(Constant.XFlag.ENABLE_RECALL, true);
     }
 
     @Override
@@ -96,9 +94,6 @@ public class DingDingHandler extends BaseHandler implements DingDingPlugin.Handl
                 break;
             case Constant.XFlag.ENABLE_FAST_LUCKY:
                 mEnableFastLucky = enable;
-                break;
-            case Constant.XFlag.ENABLE_RECALL:
-                mEnableRecall = enable;
                 break;
         }
     }

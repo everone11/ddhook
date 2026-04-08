@@ -34,9 +34,7 @@ import com.sky.xposed.rimet.plugin.interfaces.XVersionManager;
 import com.sky.xposed.rimet.plugin.main.SettingsPlugin;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
@@ -60,7 +58,6 @@ public class PluginManager implements XPluginManager {
     private final XposedInterface mXposedInterface;
     private final XVersionManager mVersionManager;
     private XConfigManager mConfigManager;
-    private final Map<Class, Object> mObjectMap = new HashMap<>();
 
     private final SparseArray<XPlugin> mXPlugins = new SparseArray<>();
 
@@ -175,25 +172,8 @@ public class PluginManager implements XPluginManager {
         return mXPlugins.get(id);
     }
 
-    @Override
-    public <T> T getObject(Class<T> tClass) {
-
-        if (mObjectMap.containsKey(tClass)) {
-            return (T) mObjectMap.get(tClass);
-        }
-
-        try {
-            T result = tClass.getConstructor(XPluginManager.class).newInstance(this);
-            mObjectMap.put(tClass, result);
-            return result;
-        } catch (Throwable tr) {
-            Log.e(TAG, "getObject: instantiation failed", tr);
-        }
-        return null;
-    }
-
     /**
-     * 开始处理需要Hook的插件
+     * 开始处理加载的包
      */
     private void handleLoadPackage(XPlugin xPlugin) {
 

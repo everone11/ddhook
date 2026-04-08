@@ -26,11 +26,6 @@ public interface Constant {
         String PACKAGE_NAME = "com.alibaba.android.rimet";
     }
 
-    interface Event {
-
-        int CLICK = 0x01;
-    }
-
     interface Color {
 
         int BLUE = 0xFF393A3F;
@@ -42,11 +37,6 @@ public interface Constant {
         int DESC = 0xff303030;
     }
 
-    interface GroupId {
-
-        int GROUP = 999;
-    }
-
     interface Name {
 
         String TITLE = "钉钉助手";
@@ -55,8 +45,6 @@ public interface Constant {
     }
 
     interface XFlag {
-
-        int MAIN_MENU = 0x000001;
 
         int ENABLE_LUCKY = 0x000002;
 
@@ -89,21 +77,6 @@ public interface Constant {
         int LOCATION_OFFSET = 0x000010;
     }
 
-    interface Preference {
-
-        String MAIN_MENU = "main.menu";
-
-        String AUTO_LOGIN = "other.autoLogin";
-
-        String ACTIVITY_CYCLE = "develop.activityCycle";
-
-        String ACTIVITY_START = "develop.activityStart";
-
-        String ACTIVITY_RESULT = "develop.activityResult";
-
-        String WECHAT_LOG = "develop.wechatLog";
-    }
-
     interface Flag {
 
         int MAIN = 0xFF000000;
@@ -120,15 +93,5 @@ public interface Constant {
         int LUCKY_MONEY = 0x03000000;
 
         int REMITTANCE = 0x04000000;
-    }
-
-    interface ItemId {
-
-        int MAIN_SETTINGS = 60001;
-    }
-
-    interface Key {
-
-        String DATA = "data";
     }
 }

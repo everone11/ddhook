@@ -16,10 +16,7 @@
 
 package com.sky.xposed.rimet.util;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
-import java.util.Set;
 
 /**
  * Created by sky on 2018/12/18.
@@ -30,15 +27,7 @@ public class CollectionUtil {
 
     }
 
-    public static List<String> setToList(Set<String> value) {
-        return isEmpty(value) ? new ArrayList<String>() : new ArrayList<>(value);
-    }
-
     public static boolean isEmpty(Collection collection) {
         return collection == null || collection.isEmpty();
-    }
-
-    public static boolean isNotEmpty(Collection collection) {
-        return collection != null && !collection.isEmpty();
     }
 }
