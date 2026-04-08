@@ -18,15 +18,8 @@ package com.sky.xposed.rimet.ui.util;
 
 import android.content.Context;
 import android.content.DialogInterface;
-import android.text.InputFilter;
-import android.text.InputType;
 import android.text.TextUtils;
 import android.util.Log;
-import android.util.TypedValue;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.EditText;
-import android.widget.FrameLayout;
 
 import androidx.appcompat.app.AlertDialog;
 
@@ -62,64 +55,6 @@ public class DialogUtil {
                 .show();
     }
 
-    public static void showDialog(Context context, String title, String message,
-                                  DialogInterface.OnClickListener positiveListener) {
-        showDialog(context, title, message, "确定", positiveListener, "取消", null, true);
-    }
-
-    public static void showDialog(Context context, String title, String message,
-                                  String positive, DialogInterface.OnClickListener positiveListener,
-                                  String negative, DialogInterface.OnClickListener negativeListener,
-                                  boolean cancel) {
-        if (context == null || TextUtils.isEmpty(message)
-                || TextUtils.isEmpty(positive) || TextUtils.isEmpty(negative)) {
-            return;
-        }
-        new AlertDialog.Builder(context)
-                .setTitle(title)
-                .setMessage(message)
-                .setCancelable(cancel)
-                .setPositiveButton(positive, positiveListener)
-                .setNegativeButton(negative, negativeListener)
-                .show();
-    }
-
-    /**
-     * 显示带编辑框的 Dialog
-     */
-    public static void showEditDialog(Context context, String title,
-                                      String content, String contentHint,
-                                      final OnEditListener listener) {
-        int paddingPx = dpToPx(context, 20f);
-        int leftPx    = dpToPx(context, 26f);
-
-        FrameLayout frame = new FrameLayout(context);
-        frame.setLayoutParams(new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        frame.setPadding(leftPx, paddingPx, leftPx, 0);
-
-        int innerPad = dpToPx(context, 5f);
-        EditText editText = new EditText(context);
-        editText.setPadding(innerPad, innerPad, innerPad, innerPad);
-        editText.setTextSize(15);
-        editText.setText(content);
-        editText.setLayoutParams(new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        editText.setSingleLine(true);
-        editText.setFilters(new InputFilter[]{new InputFilter.LengthFilter(10)});
-        editText.setHint(contentHint);
-        editText.setInputType(InputType.TYPE_CLASS_TEXT);
-        frame.addView(editText);
-
-        new AlertDialog.Builder(context)
-                .setTitle(title)
-                .setView(frame)
-                .setPositiveButton("确定", (dialog, which) ->
-                        listener.onTextChange(editText, editText.getText().toString()))
-                .setNegativeButton("取消", null)
-                .show();
-    }
-
     /**
      * 显示关于对话框
      */
@@ -135,15 +70,5 @@ public class DialogUtil {
         } catch (Throwable tr) {
             Log.e(TAG, "showAboutDialog 异常", tr);
         }
-    }
-
-    private static int dpToPx(Context context, float dp) {
-        return (int) TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP, dp,
-                context.getResources().getDisplayMetrics());
-    }
-
-    public interface OnEditListener {
-        void onTextChange(View view, String value);
     }
 }

@@ -77,11 +77,6 @@ public interface XPluginManager {
     XPlugin getXPluginById(int id);
 
     /**
-     * 根据相应的Class获取相应的对象
-     */
-    <T> T getObject(Class<T> tClass);
-
-    /**
      * 开始处理加载的包
      */
     void handleLoadPackage();

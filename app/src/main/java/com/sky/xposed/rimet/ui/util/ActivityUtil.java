@@ -21,7 +21,6 @@ import android.content.Intent;
 import android.net.Uri;
 import android.text.TextUtils;
 import android.util.Log;
-import android.widget.Toast;
 
 /**
  * Migrated from mikecraig6810/xposed-rimet.
@@ -49,18 +48,6 @@ public class ActivityUtil {
             return true;
         } catch (Exception e) {
             Log.e(TAG, "启动Activity异常", e);
-        }
-        return false;
-    }
-
-    public static boolean openUrl(Context context, String url) {
-        try {
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setData(Uri.parse(url));
-            context.startActivity(intent);
-            return true;
-        } catch (Throwable tr) {
-            Toast.makeText(context, "打开浏览器异常", Toast.LENGTH_SHORT).show();
         }
         return false;
     }

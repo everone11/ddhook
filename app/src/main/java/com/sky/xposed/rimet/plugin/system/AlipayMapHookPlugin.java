@@ -92,11 +92,12 @@ public class AlipayMapHookPlugin {
                 try {
                     double baseLat = Double.parseDouble(val);
                     String lonVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
-                    double baseLon = lonVal.isEmpty() ? 0.0 : Double.parseDouble(lonVal);
                     String offVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
-                    double offsetMeters = offVal.isEmpty() ? 0.0 : Double.parseDouble(offVal);
                     SystemHookPlugin.logSpoofed(module, "LatLonPoint#getLatitude");
-                    return SystemHookPlugin.getEffectiveCoords(baseLat, baseLon, offsetMeters)[0];
+                    if (lonVal.isEmpty() || offVal.isEmpty()) return baseLat;
+                    return SystemHookPlugin.getEffectiveCoords(
+                            baseLat, Double.parseDouble(lonVal),
+                            Double.parseDouble(offVal))[0];
                 } catch (NumberFormatException e) {
                     return chain.proceed();
                 }
@@ -109,13 +110,14 @@ public class AlipayMapHookPlugin {
                 String val = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
-                    String latVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
-                    double baseLat = latVal.isEmpty() ? 0.0 : Double.parseDouble(latVal);
                     double baseLon = Double.parseDouble(val);
+                    String latVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
                     String offVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
-                    double offsetMeters = offVal.isEmpty() ? 0.0 : Double.parseDouble(offVal);
                     SystemHookPlugin.logSpoofed(module, "LatLonPoint#getLongitude");
-                    return SystemHookPlugin.getEffectiveCoords(baseLat, baseLon, offsetMeters)[1];
+                    if (latVal.isEmpty() || offVal.isEmpty()) return baseLon;
+                    return SystemHookPlugin.getEffectiveCoords(
+                            Double.parseDouble(latVal), baseLon,
+                            Double.parseDouble(offVal))[1];
                 } catch (NumberFormatException e) {
                     return chain.proceed();
                 }

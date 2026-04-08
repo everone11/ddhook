@@ -124,17 +124,9 @@ public abstract class BaseHandler implements XHandler {
         }
     }
 
-    public Object getObjectField(Object obj, int fieldKey) {
-        return getObjectField(obj, getXString(fieldKey));
-    }
-
     public int getIntField(Object obj, String fieldName) {
         Object value = getObjectField(obj, fieldName);
         return value instanceof Integer ? (Integer) value : 0;
-    }
-
-    public int getIntField(Object obj, int fieldKey) {
-        return getIntField(obj, getXString(fieldKey));
     }
 
     /**
@@ -163,10 +155,6 @@ public abstract class BaseHandler implements XHandler {
         return null;
     }
 
-    public Object callMethod(Object obj, int methodKey, Object... args) {
-        return callMethod(obj, getXString(methodKey), args);
-    }
-
     /**
      * Calls a static method by name using reflection, matching by parameter count.
      * Replaces XposedHelpers.callStaticMethod().
@@ -186,10 +174,6 @@ public abstract class BaseHandler implements XHandler {
         }
         Log.w(TAG, "callStaticMethod: method not found: " + methodName);
         return null;
-    }
-
-    public Object callStaticMethod(Class<?> clazz, int methodKey, Object... args) {
-        return callStaticMethod(clazz, getXString(methodKey), args);
     }
 
     /**
