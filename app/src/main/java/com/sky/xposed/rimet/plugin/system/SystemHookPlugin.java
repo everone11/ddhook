@@ -25,6 +25,7 @@ import com.sky.xposed.rimet.Constant;
 
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 
 import io.github.libxposed.api.XposedModule;
@@ -68,6 +69,15 @@ public class SystemHookPlugin {
     // Rate-limited spoof-log using AtomicLong for lock-free CAS update.
     private static final AtomicLong sLastSpoofLogMs = new AtomicLong(0L);
     private static final long LOG_INTERVAL_MS = 5_000L;
+
+    // -----------------------------------------------------------------------
+    // Random GPS offset cache — keeps lat and lon offsets consistent within
+    // the same base-coordinate + offset-distance combination.
+    // -----------------------------------------------------------------------
+    private static final Random sRandom = new Random();
+
+    /** Stores [baseLat, baseLon, offsetMeters, deltaLat, deltaLon]. */
+    private static volatile double[] sGpsOffsetCache = null;
 
     private SystemHookPlugin() {
     }
@@ -142,6 +152,43 @@ public class SystemHookPlugin {
         }
     }
 
+    /**
+     * Returns a two-element array {@code [effectiveLat, effectiveLon]} with the random offset
+     * applied.  The offset pair is cached and only regenerated when the base coordinates or
+     * offset distance change, ensuring latitude and longitude share a consistent random delta.
+     *
+     * <p>Offset algorithm: picks a random direction (uniform over [0, 2π)) and a random radius
+     * (uniform over a disc of {@code offsetMeters}) then converts to degree increments.</p>
+     *
+     * @param baseLat     the configured (unperturbed) latitude in degrees.
+     * @param baseLon     the configured (unperturbed) longitude in degrees.
+     * @param offsetMeters maximum random offset radius in metres; 0 means no offset.
+     * @return {@code double[]{effectiveLat, effectiveLon}}
+     */
+    static synchronized double[] getEffectiveCoords(double baseLat, double baseLon, double offsetMeters) {
+        double[] cache = sGpsOffsetCache;
+        if (cache != null
+                && cache[0] == baseLat
+                && cache[1] == baseLon
+                && cache[2] == offsetMeters) {
+            return new double[]{cache[3], cache[4]};
+        }
+        double deltaLat = 0.0;
+        double deltaLon = 0.0;
+        if (offsetMeters > 0) {
+            double theta = sRandom.nextDouble() * 2 * Math.PI;
+            double r = Math.sqrt(sRandom.nextDouble()) * offsetMeters;
+            deltaLat = r * Math.cos(theta) / 111111.0;
+            double cosLat = Math.cos(Math.toRadians(baseLat));
+            if (cosLat > 1e-10) {
+                deltaLon = r * Math.sin(theta) / (111111.0 * cosLat);
+            }
+        }
+        sGpsOffsetCache = new double[]{baseLat, baseLon, offsetMeters,
+                baseLat + deltaLat, baseLon + deltaLon};
+        return new double[]{baseLat + deltaLat, baseLon + deltaLon};
+    }
+
     // -----------------------------------------------------------------------
     // Location hooks
     // -----------------------------------------------------------------------
@@ -157,8 +204,13 @@ public class SystemHookPlugin {
                 String val = getString(prefs, Constant.XFlag.LATITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
+                    double baseLat = Double.parseDouble(val);
+                    String lonVal = getString(prefs, Constant.XFlag.LONGITUDE);
+                    double baseLon = lonVal.isEmpty() ? 0.0 : Double.parseDouble(lonVal);
+                    String offVal = getString(prefs, Constant.XFlag.LOCATION_OFFSET);
+                    double offsetMeters = offVal.isEmpty() ? 0.0 : Double.parseDouble(offVal);
                     logSpoofed(module, "android.location.Location#getLatitude");
-                    return Double.parseDouble(val);
+                    return getEffectiveCoords(baseLat, baseLon, offsetMeters)[0];
                 } catch (NumberFormatException e) {
                     return chain.proceed();
                 }
@@ -171,8 +223,13 @@ public class SystemHookPlugin {
                 String val = getString(prefs, Constant.XFlag.LONGITUDE);
                 if (val.isEmpty()) return chain.proceed();
                 try {
+                    String latVal = getString(prefs, Constant.XFlag.LATITUDE);
+                    double baseLat = latVal.isEmpty() ? 0.0 : Double.parseDouble(latVal);
+                    double baseLon = Double.parseDouble(val);
+                    String offVal = getString(prefs, Constant.XFlag.LOCATION_OFFSET);
+                    double offsetMeters = offVal.isEmpty() ? 0.0 : Double.parseDouble(offVal);
                     logSpoofed(module, "android.location.Location#getLongitude");
-                    return Double.parseDouble(val);
+                    return getEffectiveCoords(baseLat, baseLon, offsetMeters)[1];
                 } catch (NumberFormatException e) {
                     return chain.proceed();
                 }

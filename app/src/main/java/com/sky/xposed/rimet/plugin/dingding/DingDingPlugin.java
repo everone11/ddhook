@@ -148,6 +148,10 @@ public class DingDingPlugin extends BasePlugin {
                 InputType.TYPE_CLASS_NUMBER
                         | InputType.TYPE_NUMBER_FLAG_DECIMAL
                         | InputType.TYPE_NUMBER_FLAG_SIGNED, padV);
+        EditText etOffset = addField(layout, activity, "随机偏移距离 (米, 0=不偏移)",
+                prefs.getString(key(Constant.XFlag.LOCATION_OFFSET), ""),
+                InputType.TYPE_CLASS_NUMBER
+                        | InputType.TYPE_NUMBER_FLAG_DECIMAL, padV);
 
         addSectionLabel(layout, activity, "WiFi 信息", pad);
         EditText etWifiSsid = addField(layout, activity, "WiFi SSID",
@@ -185,6 +189,8 @@ public class DingDingPlugin extends BasePlugin {
                                         etLat.getText().toString().trim())
                                 .putString(key(Constant.XFlag.LONGITUDE),
                                         etLon.getText().toString().trim())
+                                .putString(key(Constant.XFlag.LOCATION_OFFSET),
+                                        etOffset.getText().toString().trim())
                                 .putString(key(Constant.XFlag.WIFI_SSID),
                                         etWifiSsid.getText().toString().trim())
                                 .putString(key(Constant.XFlag.WIFI_BSSID),

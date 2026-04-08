@@ -85,6 +85,8 @@ public interface Constant {
         int CELL_MCC = 0x00000E;
 
         int CELL_MNC = 0x00000F;
+
+        int LOCATION_OFFSET = 0x000010;
     }
 
     interface Preference {
