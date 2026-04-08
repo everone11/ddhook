@@ -386,14 +386,14 @@ public class DingTalkDeepHookPlugin {
                                                         Double.parseDouble(offStr));
                                             }
                                             if (!latStr.isEmpty()) {
-                                                double lat = (coords != null)
+                                                double latVal = (coords != null)
                                                         ? coords[0] : Double.parseDouble(latStr);
-                                                setLatMethod.invoke(args[0], lat);
+                                                setLatMethod.invoke(args[0], latVal);
                                             }
                                             if (!lonStr.isEmpty()) {
-                                                double lon = (coords != null)
+                                                double lonVal = (coords != null)
                                                         ? coords[1] : Double.parseDouble(lonStr);
-                                                setLonMethod.invoke(args[0], lon);
+                                                setLonMethod.invoke(args[0], lonVal);
                                             }
                                             SystemHookPlugin.logSpoofed(module,
                                                     "AMapLocationListener#onLocationChanged");
