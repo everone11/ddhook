@@ -46,14 +46,6 @@ public interface Constant {
 
     interface XFlag {
 
-        int ENABLE_LUCKY = 0x000002;
-
-        int LUCKY_DELAYED = 0x000003;
-
-        int ENABLE_FAST_LUCKY = 0x000004;
-
-        int ENABLE_RECALL = 0x000005;
-
         int ENABLE_LOCATION = 0x000006;
 
         int LATITUDE = 0x000007;
@@ -89,9 +81,5 @@ public interface Constant {
         int DEBUG = 0x01000000;
 
         int DING_DING = 0x02000000;
-
-        int LUCKY_MONEY = 0x03000000;
-
-        int REMITTANCE = 0x04000000;
     }
 }

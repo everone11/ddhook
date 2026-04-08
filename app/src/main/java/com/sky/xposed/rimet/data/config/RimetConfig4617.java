@@ -31,45 +31,16 @@ public class RimetConfig4617 extends RimetConfig {
         /** Class */
         add(M.classz.class_rimet_LauncherApplication, "com.alibaba.android.rimet.LauncherApplication");
         add(M.classz.class_dingtalkbase_multidexsupport_DDApplication, "com.alibaba.android.dingtalkbase.multidexsupport.DDApplication");
-        add(M.classz.class_defpackage_ConversationChangeMaid, "dpw");   // ConversationChangeMaid
-        add(M.classz.class_plugin_webwx_ui_ExtDeviceWXLoginUI, "com.tencent.mm.plugin.webwx.ui.ExtDeviceWXLoginUI");
-        add(M.classz.class_defpackage_ServiceFactory, "jpn");   // ServiceFactory
-        add(M.classz.class_android_dingtalk_redpackets_idl_service_RedEnvelopPickIService, "com.alibaba.android.dingtalk.redpackets.idl.service.RedEnvelopPickIService");
-        add(M.classz.class_defpackage_RedPacketsRpc, "ces");
-        add(M.classz.class_defpackage_RedPacketsRpc_9, "ces$9");
         add(M.classz.class_lightapp_runtime_LightAppRuntimeReverseInterfaceImpl, "com.alibaba.lightapp.runtime.LightAppRuntimeReverseInterfaceImpl");
-        add(M.classz.class_android_dingtalk_redpackets_activities_FestivalRedPacketsPickActivity, "com.alibaba.android.dingtalk.redpackets.activities.FestivalRedPacketsPickActivity");
-        add(M.classz.class_android_dingtalk_redpackets_activities_PickRedPacketsActivity, "com.alibaba.android.dingtalk.redpackets.activities.PickRedPacketsActivity");
         add(M.classz.class_android_user_settings_activity_NewSettingActivity, "com.alibaba.android.user.settings.activity.NewSettingActivity");
         add(M.classz.class_android_user_settings_activity_UserSettingsActivity, "com.alibaba.android.user.settings.activity.UserSettingsActivity");
 
         /** Method */
-        add(M.method.method_dingtalkbase_multidexsupport_DDApplication_onCreate, "onCreate");
-        add(M.method.method_defpackage_ConversationChangeMaid_onLatestMessageChanged, "onLatestMessageChanged");
-        add(M.method.method_wukong_im_conversation_ConversationImpl_latestMessage, "latestMessage");
-        add(M.method.method_wukong_im_message_MessageImpl_messageContent, "messageContent");
-        add(M.method.method_wukong_im_message_MessageContentImpl_contents, "contents");
-        add(M.method.method_defpackage_RedPacketsRpc_newInstance, "a");
-        add(M.method.method_defpackage_ServiceFactory_getService, "a");
-        add(M.method.method_android_dingtalk_redpackets_idl_service_RedEnvelopPickIService_pickRedEnvelopCluster, "pickRedEnvelopCluster");
         add(M.method.method_lightapp_runtime_LightAppRuntimeReverseInterfaceImpl_initSecurityGuard, "initSecurityGuard");
-        add(M.method.method_android_dingtalk_redpackets_activities_FestivalRedPacketsPickActivity_initView, "a");
-        add(M.method.method_android_dingtalk_redpackets_activities_PickRedPacketsActivity_initView, "a");
         add(M.method.method_android_user_settings_activity_NewSettingActivity_onCreate, "onCreate");
         add(M.method.method_android_user_settings_activity_UserSettingsActivity_onCreate, "onCreate");
 
-        /** Field */
-        add(M.field.field_wukong_im_message_MessageContentImpl_mType, "mType");
-        add(M.field.field_wukong_im_message_MessageContentImpl_CustomMessageContentImpl_mCustomType, "mCustomType");
-        add(M.field.field_wukong_im_message_MessageContentImpl_CustomMessageContentImpl_mExtension, "mExtension");
-
-        /** Key */
-        add(M.key.key_sid, "sid");
-        add(M.key.key_clusterid, "clusterid");
-
         /** Res */
-        add(M.res.res_iv_pick, "iv_pick");
-        add(M.res.res_btn_pick, "btn_pick");
         add(M.res.res_setting_msg_notice, "setting_msg_notice");
     }
 }
