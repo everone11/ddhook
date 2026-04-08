@@ -25,4 +25,5 @@
     <color name="colorItemDesc">#888888</color>
     <color name="colorDivider">#e0e0e0</color>
     <color name="colorWhite">#FFFFFF</color>
+    <color name="colorCardBackground">#FFFFFF</color>
 </resources>
