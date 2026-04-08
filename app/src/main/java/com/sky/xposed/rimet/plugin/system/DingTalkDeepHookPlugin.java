@@ -16,13 +16,18 @@
 
 package com.sky.xposed.rimet.plugin.system;
 
+import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
+import android.widget.Toast;
 
 import com.sky.xposed.rimet.Constant;
 
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicLong;
 
 import io.github.libxposed.api.XposedModule;
 
@@ -49,7 +54,31 @@ public class DingTalkDeepHookPlugin {
 
     private static final String TAG = "DingTalkDeepHook";
 
+    /** Rate-limit for hook-status Toast: show at most once every 10 seconds per startLocation. */
+    private static final long TOAST_INTERVAL_MS = 10_000L;
+    private static final AtomicLong sLastToastMs = new AtomicLong(0L);
+    private static final Handler sMainHandler = new Handler(Looper.getMainLooper());
+
     private DingTalkDeepHookPlugin() {
+    }
+
+    /**
+     * Posts a hook-status Toast on the main thread.
+     *
+     * @param ctx     application context inside the DingTalk process
+     * @param active  true if location spoofing is currently enabled and configured
+     */
+    private static void showHookStatusToast(Context ctx, boolean active) {
+        if (ctx == null) return;
+        long now = System.currentTimeMillis();
+        // Atomically update sLastToastMs only if TOAST_INTERVAL_MS has elapsed.
+        // getAndUpdate returns the previous value; if the previous value is recent
+        // (< TOAST_INTERVAL_MS ago), skip showing the toast.
+        long prev = sLastToastMs.getAndUpdate(last ->
+                (now - last >= TOAST_INTERVAL_MS) ? now : last);
+        if (now - prev < TOAST_INTERVAL_MS) return;
+        String msg = active ? "✓ 虚拟定位 Hook 已激活" : "⚠ 虚拟定位 Hook 未启用，将使用真实位置";
+        sMainHandler.post(() -> Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show());
     }
 
     /**
@@ -219,6 +248,25 @@ public class DingTalkDeepHookPlugin {
                 module.log(Log.INFO, TAG, "hookAMapLocationClient#getLastKnownLocation installed");
             } catch (Throwable e) {
                 module.log(Log.WARN, TAG, "hookAMapLocationClient#getLastKnownLocation failed", e);
+            }
+
+            // startLocation() — show a Toast when DingTalk initiates location collection,
+            // which happens when the user enters the attendance check-in screen (考勤打卡).
+            // The Toast indicates whether location spoofing is active (hook success/failure).
+            try {
+                Method startLocation = clientCls.getMethod("startLocation");
+                module.hook(startLocation).intercept(chain -> {
+                    Object result = chain.proceed();
+                    SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
+                    boolean active = SystemHookPlugin.isEnabled(prefs)
+                            && !SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE).isEmpty()
+                            && !SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE).isEmpty();
+                    showHookStatusToast(SystemHookPlugin.sAppContext, active);
+                    return result;
+                });
+                module.log(Log.INFO, TAG, "hookAMapLocationClient#startLocation installed");
+            } catch (Throwable e) {
+                module.log(Log.WARN, TAG, "hookAMapLocationClient#startLocation failed", e);
             }
 
             // AMapLocation.getLatitude/getLongitude — hook getters directly using the app
