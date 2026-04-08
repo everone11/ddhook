@@ -55,7 +55,15 @@ public class CategoryItemView extends FrameLayout {
         setPadding(0, vPad, 0, vPad);
 
         tvName = new TextView(context);
-        tvName.setTextColor(context.getColor(android.R.color.holo_blue_dark));
+        // Resolve colorPrimary from the current theme so the header text adapts to dark mode.
+        TypedValue colorPrimaryTv = new TypedValue();
+        int tvColor;
+        if (context.getTheme().resolveAttribute(android.R.attr.colorPrimary, colorPrimaryTv, true)) {
+            tvColor = colorPrimaryTv.data;
+        } else {
+            tvColor = context.getColor(android.R.color.holo_blue_dark);
+        }
+        tvName.setTextColor(tvColor);
         tvName.setTextSize(13f);
 
         int leftMargin = dpToPx(context, 15f);
