@@ -16,6 +16,14 @@
         android:allowBackup="false"
         android:extractNativeLibs="false">
 
+        <!-- Xposed module identification — required for LSPosed to detect and scope this module -->
+        <meta-data android:name="xposedmodule" android:value="true" />
+        <meta-data android:name="xposeddescription" android:value="@string/app_description" />
+        <meta-data android:name="xposedminversion" android:value="101" />
+        <!-- Restricts the LSPosed scope UI to only show DingTalk -->
+        <meta-data android:name="xposedscope" android:resource="@array/xposed_scope" />
+        <meta-data android:name="xposedmoduleentry" android:value="com.sky.xposed.rimet.Main" />
+
         <!-- Settings / launcher Activity — required for LSPosed to list this module -->
         <activity
             android:name=".ui.activity.MainActivity"
