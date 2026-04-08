@@ -17,6 +17,7 @@
 package com.sky.xposed.rimet.plugin.main;
 
 import android.app.Activity;
+import android.content.res.TypedArray;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -48,7 +49,8 @@ public class SettingsPlugin extends BasePlugin {
 
     private static final String TAG = "SettingsPlugin";
 
-    private static final int COLOR_DIVIDER = 0xFFEFEFEF;
+    /** Semi-transparent divider colour that is legible on both light and dark backgrounds. */
+    private static final int COLOR_DIVIDER_FALLBACK = 0x1F888888;
     private static final int ITEM_PADDING_DP = 16;
     private static final int TEXT_SIZE_TITLE_SP = 16;
     private static final int TEXT_SIZE_VERSION_SP = 14;
@@ -103,6 +105,13 @@ public class SettingsPlugin extends BasePlugin {
         LinearLayout container = new LinearLayout(activity);
         container.setOrientation(LinearLayout.VERTICAL);
 
+        // Resolve theme-aware text colours so the entry is readable in both light and dark mode.
+        int[] themeAttrs = new int[]{android.R.attr.textColorPrimary, android.R.attr.textColorSecondary};
+        TypedArray ta = activity.obtainStyledAttributes(themeAttrs);
+        int textColorPrimary   = ta.getColor(0, Color.BLACK);
+        int textColorSecondary = ta.getColor(1, Color.GRAY);
+        ta.recycle();
+
         // Item row: name on the left, version tag on the right.
         LinearLayout itemRow = new LinearLayout(activity);
         itemRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -116,7 +125,7 @@ public class SettingsPlugin extends BasePlugin {
         TextView nameView = new TextView(activity);
         nameView.setText(Constant.Name.TITLE);
         nameView.setTextSize(TypedValue.COMPLEX_UNIT_SP, TEXT_SIZE_TITLE_SP);
-        nameView.setTextColor(Color.BLACK);
+        nameView.setTextColor(textColorPrimary);
         LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         itemRow.addView(nameView, nameParams);
@@ -124,7 +133,7 @@ public class SettingsPlugin extends BasePlugin {
         TextView versionView = new TextView(activity);
         versionView.setText("v" + BuildConfig.VERSION_NAME);
         versionView.setTextSize(TypedValue.COMPLEX_UNIT_SP, TEXT_SIZE_VERSION_SP);
-        versionView.setTextColor(Color.GRAY);
+        versionView.setTextColor(textColorSecondary);
         itemRow.addView(versionView,
                 new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -136,9 +145,19 @@ public class SettingsPlugin extends BasePlugin {
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // Separator line.
+        // Separator line — resolve a theme-aware divider colour at 12 % opacity.
+        int dividerColor;
+        TypedValue dividerTv = new TypedValue();
+        if (activity.getTheme().resolveAttribute(android.R.attr.colorControlNormal, dividerTv, true)) {
+            dividerColor = Color.argb(0x1F,
+                    Color.red(dividerTv.data),
+                    Color.green(dividerTv.data),
+                    Color.blue(dividerTv.data));
+        } else {
+            dividerColor = COLOR_DIVIDER_FALLBACK;
+        }
         View divider = new View(activity);
-        divider.setBackgroundColor(COLOR_DIVIDER);
+        divider.setBackgroundColor(dividerColor);
         container.addView(divider,
                 new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, dp2px(activity, DIVIDER_HEIGHT_DP)));

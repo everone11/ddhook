@@ -237,7 +237,7 @@ public class SystemHookPlugin {
             module.hook(getBSSID).intercept(chain -> {
                 SharedPreferences prefs = getPrefs(module);
                 if (!isEnabled(prefs)) return chain.proceed();
-                // BSSID is not exposed in the UI; an empty value means "no override"
+                // An empty BSSID value means "no override".
                 String bssid = getString(prefs, Constant.XFlag.WIFI_BSSID);
                 if (bssid.isEmpty()) return chain.proceed();
                 return bssid;
