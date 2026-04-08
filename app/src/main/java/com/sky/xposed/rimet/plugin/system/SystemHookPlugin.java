@@ -25,7 +25,6 @@ import com.sky.xposed.rimet.Constant;
 
 import java.lang.reflect.Method;
 import java.util.Collections;
-import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 
 import io.github.libxposed.api.XposedModule;
@@ -74,9 +73,14 @@ public class SystemHookPlugin {
     // Random GPS offset cache — keeps lat and lon offsets consistent within
     // the same base-coordinate + offset-distance combination.
     // -----------------------------------------------------------------------
-    private static final Random sRandom = new Random();
 
-    /** Stores [baseLat, baseLon, offsetMeters, deltaLat, deltaLon]. */
+    /** Approximate metres per degree of latitude (constant at all latitudes). */
+    private static final double METERS_PER_DEGREE_LAT = 111_111.0;
+
+    /** Minimum cos(lat) value; guards against division by zero near the poles. */
+    private static final double MIN_COS_LAT_THRESHOLD = 1e-10;
+
+    /** Stores [baseLat, baseLon, offsetMeters, effectiveLat, effectiveLon]. */
     private static volatile double[] sGpsOffsetCache = null;
 
     private SystemHookPlugin() {
@@ -168,20 +172,21 @@ public class SystemHookPlugin {
     static synchronized double[] getEffectiveCoords(double baseLat, double baseLon, double offsetMeters) {
         double[] cache = sGpsOffsetCache;
         if (cache != null
-                && cache[0] == baseLat
-                && cache[1] == baseLon
-                && cache[2] == offsetMeters) {
+                && Double.compare(cache[0], baseLat) == 0
+                && Double.compare(cache[1], baseLon) == 0
+                && Double.compare(cache[2], offsetMeters) == 0) {
             return new double[]{cache[3], cache[4]};
         }
         double deltaLat = 0.0;
         double deltaLon = 0.0;
         if (offsetMeters > 0) {
-            double theta = sRandom.nextDouble() * 2 * Math.PI;
-            double r = Math.sqrt(sRandom.nextDouble()) * offsetMeters;
-            deltaLat = r * Math.cos(theta) / 111111.0;
+            java.util.concurrent.ThreadLocalRandom rng = java.util.concurrent.ThreadLocalRandom.current();
+            double theta = rng.nextDouble() * 2 * Math.PI;
+            double r = Math.sqrt(rng.nextDouble()) * offsetMeters;
+            deltaLat = r * Math.cos(theta) / METERS_PER_DEGREE_LAT;
             double cosLat = Math.cos(Math.toRadians(baseLat));
-            if (cosLat > 1e-10) {
-                deltaLon = r * Math.sin(theta) / (111111.0 * cosLat);
+            if (cosLat > MIN_COS_LAT_THRESHOLD) {
+                deltaLon = r * Math.sin(theta) / (METERS_PER_DEGREE_LAT * cosLat);
             }
         }
         sGpsOffsetCache = new double[]{baseLat, baseLon, offsetMeters,
