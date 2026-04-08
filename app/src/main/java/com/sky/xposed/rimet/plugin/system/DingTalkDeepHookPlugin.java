@@ -27,7 +27,7 @@ import com.sky.xposed.rimet.Constant;
 
 import java.lang.reflect.Method;
 import java.util.Collections;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.libxposed.api.XposedModule;
 
@@ -54,29 +54,24 @@ public class DingTalkDeepHookPlugin {
 
     private static final String TAG = "DingTalkDeepHook";
 
-    /** Rate-limit for hook-status Toast: show at most once every 10 seconds per startLocation. */
-    private static final long TOAST_INTERVAL_MS = 10_000L;
-    private static final AtomicLong sLastToastMs = new AtomicLong(0L);
+    /** One-shot flag: show hook-status Toast only the first time the attendance screen opens. */
+    private static final AtomicBoolean sToastShown = new AtomicBoolean(false);
     private static final Handler sMainHandler = new Handler(Looper.getMainLooper());
 
     private DingTalkDeepHookPlugin() {
     }
 
     /**
-     * Posts a hook-status Toast on the main thread.
+     * Posts a hook-status Toast on the main thread the first time it is called.
+     * Subsequent calls are ignored so the notification only appears once per
+     * app session (i.e. the first time the attendance check-in screen is opened).
      *
      * @param ctx     application context inside the DingTalk process
      * @param active  true if location spoofing is currently enabled and configured
      */
     private static void showHookStatusToast(Context ctx, boolean active) {
         if (ctx == null) return;
-        long now = System.currentTimeMillis();
-        // Atomically update sLastToastMs only if TOAST_INTERVAL_MS has elapsed.
-        // getAndUpdate returns the previous value; if the previous value is recent
-        // (< TOAST_INTERVAL_MS ago), skip showing the toast.
-        long prev = sLastToastMs.getAndUpdate(last ->
-                (now - last >= TOAST_INTERVAL_MS) ? now : last);
-        if (now - prev < TOAST_INTERVAL_MS) return;
+        if (!sToastShown.compareAndSet(false, true)) return;
         String msg = active ? "✓ 虚拟定位 Hook 已激活" : "⚠ 虚拟定位 Hook 未启用，将使用真实位置";
         sMainHandler.post(() -> Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show());
     }
