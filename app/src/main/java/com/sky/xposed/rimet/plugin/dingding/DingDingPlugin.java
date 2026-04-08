@@ -35,8 +35,6 @@ import com.sky.xposed.rimet.plugin.base.BasePlugin;
 import com.sky.xposed.rimet.plugin.interfaces.XPlugin;
 import com.sky.xposed.rimet.plugin.interfaces.XPluginManager;
 
-import java.util.List;
-
 /**
  * Created by sky on 2019/3/14.
  *
@@ -48,16 +46,8 @@ import java.util.List;
  */
 public class DingDingPlugin extends BasePlugin {
 
-    private Handler mHandler;
-
     public DingDingPlugin(Build build) {
         super(build.mPluginManager);
-        mHandler = build.mHandler;
-    }
-
-    @Override
-    public void setEnable(int flag, boolean enable) {
-        mHandler.setEnable(flag, enable);
     }
 
     @Override
@@ -74,31 +64,6 @@ public class DingDingPlugin extends BasePlugin {
                 M.method.method_lightapp_runtime_LightAppRuntimeReverseInterfaceImpl_initSecurityGuard,
                 Context.class)
                 .before(chain -> null);
-
-        // Hook conversation-change event to detect red packets
-        findMethod(
-                M.classz.class_defpackage_ConversationChangeMaid,
-                M.method.method_defpackage_ConversationChangeMaid_onLatestMessageChanged,
-                List.class)
-                .after(chain -> {
-                    mHandler.onHandlerMessage((List) chain.getArg(0));
-                });
-
-        // Hook festival red-packet pick activity
-        findMethod(
-                M.classz.class_android_dingtalk_redpackets_activities_FestivalRedPacketsPickActivity,
-                M.method.method_android_dingtalk_redpackets_activities_FestivalRedPacketsPickActivity_initView)
-                .after(chain -> {
-                    mHandler.onHandlerFestivalRedPacketsPick((Activity) chain.getThisObject());
-                });
-
-        // Hook regular red-packet pick activity
-        findMethod(
-                M.classz.class_android_dingtalk_redpackets_activities_PickRedPacketsActivity,
-                M.method.method_android_dingtalk_redpackets_activities_PickRedPacketsActivity_initView)
-                .after(chain -> {
-                    mHandler.onHandlerPickRedPackets((Activity) chain.getThisObject());
-                });
     }
 
     @Override
@@ -251,29 +216,12 @@ public class DingDingPlugin extends BasePlugin {
         return et;
     }
 
-    public interface Handler {
-
-        void setEnable(int flag, boolean enable);
-
-        void onHandlerMessage(List conversations);
-
-        void onHandlerFestivalRedPacketsPick(Activity activity);
-
-        void onHandlerPickRedPackets(Activity activity);
-    }
-
     public static class Build {
 
         private XPluginManager mPluginManager;
-        private Handler mHandler;
 
         public Build(XPluginManager pluginManager) {
             mPluginManager = pluginManager;
-        }
-
-        public Build setHandler(Handler handler) {
-            mHandler = handler;
-            return this;
         }
 
         public XPlugin build() {

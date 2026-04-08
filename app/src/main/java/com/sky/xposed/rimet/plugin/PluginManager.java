@@ -25,7 +25,6 @@ import android.util.SparseArray;
 
 import com.sky.xposed.rimet.Constant;
 import com.sky.xposed.rimet.data.ConfigManager;
-import com.sky.xposed.rimet.plugin.dingding.DingDingHandler;
 import com.sky.xposed.rimet.plugin.dingding.DingDingPlugin;
 import com.sky.xposed.rimet.plugin.interfaces.XConfigManager;
 import com.sky.xposed.rimet.plugin.interfaces.XPlugin;
@@ -195,7 +194,6 @@ public class PluginManager implements XPluginManager {
         addPlugin(new SettingsPlugin(this));
         addPlugin(new DingDingPlugin
                 .Build(this)
-                .setHandler(new DingDingHandler(this))
                 .build());
     }
 
