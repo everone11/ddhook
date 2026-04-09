@@ -117,7 +117,7 @@ public class DingDingPlugin extends BasePlugin {
 
         List<LocationPreset> presets = loadPresets(prefs);
         List<String> names = new ArrayList<>();
-        names.add("(不使用分类)");
+        names.add("未配置");
         for (LocationPreset p : presets) {
             names.add(p.name);
         }
@@ -126,9 +126,17 @@ public class DingDingPlugin extends BasePlugin {
                 activity, android.R.layout.simple_spinner_item, names);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
 
-        Spinner spinner = new Spinner(activity);
+        // Use MODE_DIALOG to avoid duplicate arrow / flicker when inside a ScrollView
+        Spinner spinner = new Spinner(activity, Spinner.MODE_DIALOG);
         spinner.setAdapter(adapter);
         layout.addView(spinner, rowParams(padV));
+
+        // Restore previously selected preset
+        String savedName = prefs.getString(key(Constant.XFlag.SELECTED_PRESET_NAME), "");
+        if (!savedName.isEmpty()) {
+            int savedIndex = names.indexOf(savedName);
+            if (savedIndex > 0) spinner.setSelection(savedIndex);
+        }
 
         // Buttons: Save preset / Delete preset (created without listeners for now)
         LinearLayout btnRow = new LinearLayout(activity);
@@ -253,36 +261,44 @@ public class DingDingPlugin extends BasePlugin {
             names.remove(pos);
             adapter.notifyDataSetChanged();
             spinner.setSelection(0);
+            // Clear saved selection since the preset no longer exists
+            prefs.edit()
+                    .putString(key(Constant.XFlag.SELECTED_PRESET_NAME), "")
+                    .apply();
         });
 
         new AlertDialog.Builder(activity)
                 .setTitle(Constant.Name.TITLE + " — 虚拟定位")
                 .setView(scrollView)
-                .setPositiveButton("保存", (d, w) ->
-                        prefs.edit()
-                                .putBoolean(key(Constant.XFlag.ENABLE_LOCATION),
-                                        cbEnable.isChecked())
-                                .putString(key(Constant.XFlag.LATITUDE),
-                                        etLat.getText().toString().trim())
-                                .putString(key(Constant.XFlag.LONGITUDE),
-                                        etLon.getText().toString().trim())
-                                .putString(key(Constant.XFlag.LOCATION_OFFSET),
-                                        etOffset.getText().toString().trim())
-                                .putString(key(Constant.XFlag.WIFI_SSID),
-                                        etWifiSsid.getText().toString().trim())
-                                .putString(key(Constant.XFlag.WIFI_BSSID),
-                                        etWifiBssid.getText().toString().trim())
-                                .putString(key(Constant.XFlag.WIFI_MAC),
-                                        etWifiMac.getText().toString().trim())
-                                .putString(key(Constant.XFlag.CELL_ID),
-                                        etCellId.getText().toString().trim())
-                                .putString(key(Constant.XFlag.CELL_LAC),
-                                        etCellLac.getText().toString().trim())
-                                .putString(key(Constant.XFlag.CELL_MCC),
-                                        etCellMcc.getText().toString().trim())
-                                .putString(key(Constant.XFlag.CELL_MNC),
-                                        etCellMnc.getText().toString().trim())
-                                .apply())
+                .setPositiveButton("保存", (d, w) -> {
+                    int selPos = spinner.getSelectedItemPosition();
+                    String selName = selPos > 0 ? names.get(selPos) : "";
+                    prefs.edit()
+                            .putBoolean(key(Constant.XFlag.ENABLE_LOCATION),
+                                    cbEnable.isChecked())
+                            .putString(key(Constant.XFlag.LATITUDE),
+                                    etLat.getText().toString().trim())
+                            .putString(key(Constant.XFlag.LONGITUDE),
+                                    etLon.getText().toString().trim())
+                            .putString(key(Constant.XFlag.LOCATION_OFFSET),
+                                    etOffset.getText().toString().trim())
+                            .putString(key(Constant.XFlag.WIFI_SSID),
+                                    etWifiSsid.getText().toString().trim())
+                            .putString(key(Constant.XFlag.WIFI_BSSID),
+                                    etWifiBssid.getText().toString().trim())
+                            .putString(key(Constant.XFlag.WIFI_MAC),
+                                    etWifiMac.getText().toString().trim())
+                            .putString(key(Constant.XFlag.CELL_ID),
+                                    etCellId.getText().toString().trim())
+                            .putString(key(Constant.XFlag.CELL_LAC),
+                                    etCellLac.getText().toString().trim())
+                            .putString(key(Constant.XFlag.CELL_MCC),
+                                    etCellMcc.getText().toString().trim())
+                            .putString(key(Constant.XFlag.CELL_MNC),
+                                    etCellMnc.getText().toString().trim())
+                            .putString(key(Constant.XFlag.SELECTED_PRESET_NAME), selName)
+                            .apply();
+                })
                 .setNegativeButton("取消", null)
                 .show();
     }
