@@ -70,6 +70,9 @@ public interface Constant {
 
         /** Stores the JSON array of saved address presets. */
         int ADDRESS_PRESETS = 0x000011;
+
+        /** Stores the name of the last selected address preset (empty string = none). */
+        int SELECTED_PRESET_NAME = 0x000012;
     }
 
     interface Flag {
