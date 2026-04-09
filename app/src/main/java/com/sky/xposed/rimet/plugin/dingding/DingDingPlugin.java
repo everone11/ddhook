@@ -91,7 +91,7 @@ public class DingDingPlugin extends BasePlugin {
      * (which prefer the app's own local prefs when available) pick up changes
      * immediately — no cross-process IPC required.
      *
-     * <p>The dialog includes an "地址分类" (Address Category) section at the top
+     * <p>The dialog includes an "当前地址" (Current Address) section at the top
      * where users can save named presets and switch between them to auto-fill
      * all location fields at once.
      */
@@ -112,8 +112,8 @@ public class DingDingPlugin extends BasePlugin {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        // ── 地址分类 (Address Category) ────────────────────────────────────
-        addSectionLabel(layout, activity, "地址分类", pad);
+        // ── 当前地址 (Current Address) ────────────────────────────────────
+        addSectionLabel(layout, activity, "当前地址", pad);
 
         List<LocationPreset> presets = loadPresets(prefs);
         List<String> names = new ArrayList<>();
@@ -136,14 +136,14 @@ public class DingDingPlugin extends BasePlugin {
         int btnMargin = dp(activity, 4);
 
         Button btnSavePreset = new Button(activity);
-        btnSavePreset.setText("保存为新分类");
+        btnSavePreset.setText("保存新地址");
         LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         btnLp.rightMargin = btnMargin;
         btnRow.addView(btnSavePreset, btnLp);
 
         Button btnDeletePreset = new Button(activity);
-        btnDeletePreset.setText("删除分类");
+        btnDeletePreset.setText("删除地址");
         btnRow.addView(btnDeletePreset, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
@@ -219,7 +219,7 @@ public class DingDingPlugin extends BasePlugin {
             public void onNothingSelected(AdapterView<?> parent) {}
         });
 
-        // ── "保存为新分类" button: persist current field values as a named preset ──
+        // ── "保存新地址" button: persist current field values as a named preset ──
         btnSavePreset.setOnClickListener(v -> {
             EditText nameInput = new EditText(activity);
             nameInput.setHint("分类名称");
@@ -244,7 +244,7 @@ public class DingDingPlugin extends BasePlugin {
                     .show();
         });
 
-        // ── "删除分类" button: remove the currently selected preset ─────────
+        // ── "删除地址" button: remove the currently selected preset ─────────
         btnDeletePreset.setOnClickListener(v -> {
             int pos = spinner.getSelectedItemPosition();
             if (pos == 0) return; // placeholder — nothing to delete
