@@ -67,6 +67,9 @@ public interface Constant {
         int CELL_MNC = 0x00000F;
 
         int LOCATION_OFFSET = 0x000010;
+
+        /** Stores the JSON array of saved address presets. */
+        int ADDRESS_PRESETS = 0x000011;
     }
 
     interface Flag {

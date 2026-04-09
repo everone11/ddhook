@@ -22,18 +22,31 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.text.InputType;
 import android.util.TypedValue;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 import com.sky.xposed.rimet.Constant;
 import com.sky.xposed.rimet.data.M;
+import com.sky.xposed.rimet.data.model.LocationPreset;
 import com.sky.xposed.rimet.data.model.PluginInfo;
 import com.sky.xposed.rimet.plugin.base.BasePlugin;
 import com.sky.xposed.rimet.plugin.interfaces.XPlugin;
 import com.sky.xposed.rimet.plugin.interfaces.XPluginManager;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by sky on 2019/3/14.
@@ -77,13 +90,17 @@ public class DingDingPlugin extends BasePlugin {
      * hooks in {@link com.sky.xposed.rimet.plugin.system.SystemHookPlugin}
      * (which prefer the app's own local prefs when available) pick up changes
      * immediately — no cross-process IPC required.
+     *
+     * <p>The dialog includes an "地址分类" (Address Category) section at the top
+     * where users can save named presets and switch between them to auto-fill
+     * all location fields at once.
      */
     private static void showLocationDialog(Activity activity) {
         if (activity == null || activity.isFinishing()) return;
 
         SharedPreferences prefs =
                 activity.getSharedPreferences(Constant.Name.RIMET, Context.MODE_PRIVATE);
-        int pad = dp(activity, 16);
+        int pad  = dp(activity, 16);
         int padV = dp(activity, 8);
 
         // Root container
@@ -94,6 +111,43 @@ public class DingDingPlugin extends BasePlugin {
         scrollView.addView(layout, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        // ── 地址分类 (Address Category) ────────────────────────────────────
+        addSectionLabel(layout, activity, "地址分类", pad);
+
+        List<LocationPreset> presets = loadPresets(prefs);
+        List<String> names = new ArrayList<>();
+        names.add("(不使用分类)");
+        for (LocationPreset p : presets) {
+            names.add(p.name);
+        }
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                activity, android.R.layout.simple_spinner_item, names);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+
+        Spinner spinner = new Spinner(activity);
+        spinner.setAdapter(adapter);
+        layout.addView(spinner, rowParams(padV));
+
+        // Buttons: Save preset / Delete preset (created without listeners for now)
+        LinearLayout btnRow = new LinearLayout(activity);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        int btnMargin = dp(activity, 4);
+
+        Button btnSavePreset = new Button(activity);
+        btnSavePreset.setText("保存为新分类");
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        btnLp.rightMargin = btnMargin;
+        btnRow.addView(btnSavePreset, btnLp);
+
+        Button btnDeletePreset = new Button(activity);
+        btnDeletePreset.setText("删除分类");
+        btnRow.addView(btnDeletePreset, new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        layout.addView(btnRow, rowParams(0));
 
         // ── Enable virtual location ──────────────────────────────────────────
         CheckBox cbEnable = new CheckBox(activity);
@@ -143,6 +197,64 @@ public class DingDingPlugin extends BasePlugin {
                 prefs.getString(key(Constant.XFlag.CELL_MNC), ""),
                 InputType.TYPE_CLASS_NUMBER, padV);
 
+        // ── Spinner listener: auto-fill fields when a preset is selected ────
+        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (position == 0) return; // placeholder — do nothing
+                LocationPreset p = presets.get(position - 1);
+                etLat.setText(p.latitude);
+                etLon.setText(p.longitude);
+                etOffset.setText(p.offset);
+                etWifiSsid.setText(p.wifiSsid);
+                etWifiBssid.setText(p.wifiBssid);
+                etWifiMac.setText(p.wifiMac);
+                etCellId.setText(p.cellId);
+                etCellLac.setText(p.cellLac);
+                etCellMcc.setText(p.cellMcc);
+                etCellMnc.setText(p.cellMnc);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+
+        // ── "保存为新分类" button: persist current field values as a named preset ──
+        btnSavePreset.setOnClickListener(v -> {
+            EditText nameInput = new EditText(activity);
+            nameInput.setHint("分类名称");
+            nameInput.setSingleLine(true);
+            new AlertDialog.Builder(activity)
+                    .setTitle("保存地址分类")
+                    .setView(nameInput)
+                    .setPositiveButton("保存", (d2, w2) -> {
+                        String presetName = nameInput.getText().toString().trim();
+                        if (presetName.isEmpty()) return;
+                        LocationPreset preset = buildPresetFromFields(
+                                presetName, etLat, etLon, etOffset,
+                                etWifiSsid, etWifiBssid, etWifiMac,
+                                etCellId, etCellLac, etCellMcc, etCellMnc);
+                        presets.add(preset);
+                        savePresets(prefs, presets);
+                        names.add(presetName);
+                        adapter.notifyDataSetChanged();
+                        spinner.setSelection(names.size() - 1);
+                    })
+                    .setNegativeButton("取消", null)
+                    .show();
+        });
+
+        // ── "删除分类" button: remove the currently selected preset ─────────
+        btnDeletePreset.setOnClickListener(v -> {
+            int pos = spinner.getSelectedItemPosition();
+            if (pos == 0) return; // placeholder — nothing to delete
+            presets.remove(pos - 1);
+            savePresets(prefs, presets);
+            names.remove(pos);
+            adapter.notifyDataSetChanged();
+            spinner.setSelection(0);
+        });
+
         new AlertDialog.Builder(activity)
                 .setTitle(Constant.Name.TITLE + " — 虚拟定位")
                 .setView(scrollView)
@@ -173,6 +285,57 @@ public class DingDingPlugin extends BasePlugin {
                                 .apply())
                 .setNegativeButton("取消", null)
                 .show();
+    }
+
+    /** Builds a {@link LocationPreset} from the current contents of the editing fields. */
+    private static LocationPreset buildPresetFromFields(
+            String name,
+            EditText etLat, EditText etLon, EditText etOffset,
+            EditText etWifiSsid, EditText etWifiBssid, EditText etWifiMac,
+            EditText etCellId, EditText etCellLac, EditText etCellMcc, EditText etCellMnc) {
+        LocationPreset p = new LocationPreset();
+        p.name      = name;
+        p.latitude  = etLat.getText().toString().trim();
+        p.longitude = etLon.getText().toString().trim();
+        p.offset    = etOffset.getText().toString().trim();
+        p.wifiSsid  = etWifiSsid.getText().toString().trim();
+        p.wifiBssid = etWifiBssid.getText().toString().trim();
+        p.wifiMac   = etWifiMac.getText().toString().trim();
+        p.cellId    = etCellId.getText().toString().trim();
+        p.cellLac   = etCellLac.getText().toString().trim();
+        p.cellMcc   = etCellMcc.getText().toString().trim();
+        p.cellMnc   = etCellMnc.getText().toString().trim();
+        return p;
+    }
+
+    /** Loads the list of saved address presets from SharedPreferences. */
+    private static List<LocationPreset> loadPresets(SharedPreferences prefs) {
+        List<LocationPreset> list = new ArrayList<>();
+        String json = prefs.getString(key(Constant.XFlag.ADDRESS_PRESETS), "[]");
+        try {
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                list.add(LocationPreset.fromJson(arr.getJSONObject(i)));
+            }
+        } catch (JSONException e) {
+            android.util.Log.w("DingDingPlugin", "loadPresets: failed to parse presets JSON", e);
+        }
+        return list;
+    }
+
+    /** Persists the list of address presets to SharedPreferences. */
+    private static void savePresets(SharedPreferences prefs, List<LocationPreset> presets) {
+        JSONArray arr = new JSONArray();
+        for (LocationPreset p : presets) {
+            try {
+                arr.put(p.toJson());
+            } catch (JSONException e) {
+                android.util.Log.w("DingDingPlugin", "savePresets: failed to serialize preset '" + p.name + "'", e);
+            }
+        }
+        prefs.edit()
+                .putString(key(Constant.XFlag.ADDRESS_PRESETS), arr.toString())
+                .apply();
     }
 
     private static String key(int flag) {
