@@ -209,7 +209,20 @@ public class DingDingPlugin extends BasePlugin {
         spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (position == 0) return; // placeholder — do nothing
+                if (position == 0) {
+                    // 未配置 — clear all fields
+                    etLat.setText("");
+                    etLon.setText("");
+                    etOffset.setText("");
+                    etWifiSsid.setText("");
+                    etWifiBssid.setText("");
+                    etWifiMac.setText("");
+                    etCellId.setText("");
+                    etCellLac.setText("");
+                    etCellMcc.setText("");
+                    etCellMnc.setText("");
+                    return;
+                }
                 LocationPreset p = presets.get(position - 1);
                 etLat.setText(p.latitude);
                 etLon.setText(p.longitude);
