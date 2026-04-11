@@ -27,6 +27,7 @@ import com.sky.xposed.rimet.Constant;
 
 import java.lang.reflect.Method;
 import java.util.Collections;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.libxposed.api.XposedModule;
@@ -51,15 +52,16 @@ import io.github.libxposed.api.XposedModule;
  *       for getScanResults / startScan, bypassing system-level hooks.</li>
  * </ul>
  *
- * <p>Anti-recall: hooks the recall-event processor in
- * {@code com.alibaba.android.rimet.biz.session.convmsg.ConvMsgService} (primary) and
- * several fall-back class names used across different DingTalk 8.x builds.  When
- * enabled the recall notification is silently discarded so the original message
- * remains visible in the conversation.</p>
+ * <p>Anti-recall: scans all declared methods of each class in {@code RECALL_CLASS_CANDIDATES}
+ * and hooks every method whose name contains a recall/revoke keyword (e.g. "revoke",
+ * "recall", "withdraw").  This means the hook automatically adapts when DingTalk renames
+ * the method in a future version without requiring a manual config update.</p>
  *
- * <p>Red-packet grabbing: hooks the new-red-packet arrival callback in
- * {@code com.alibaba.android.rimet.biz.hbmanager.HongBaoManagerImpl} and
- * attempts to invoke the open/grab action automatically.</p>
+ * <p>Red-packet grabbing: scans all declared methods of each class in
+ * {@code HONGBAO_CLASS_CANDIDATES} and hooks every method that looks like a "new red packet
+ * arrived" callback (name contains a red-packet keyword AND an arrival keyword such as
+ * "new", "receive", "push").  After the callback fires, the grab/open action is attempted
+ * automatically via {@link #invokeGrabMethod}.</p>
  */
 public class DingTalkDeepHookPlugin {
 
@@ -68,6 +70,67 @@ public class DingTalkDeepHookPlugin {
     /** One-shot flag: show hook-status Toast only the first time the attendance screen opens. */
     private static final AtomicBoolean sToastShown = new AtomicBoolean(false);
     private static final Handler sMainHandler = new Handler(Looper.getMainLooper());
+
+    // -----------------------------------------------------------------------
+    // Anti-recall: candidate classes + method-name patterns (消息防撤回)
+    //
+    // When DingTalk updates and renames a method inside a known class, the
+    // pattern scanner will still find and hook it automatically — no manual
+    // update required.  If a method moves to a brand-new class, add that class
+    // to RECALL_CLASS_CANDIDATES.
+    // -----------------------------------------------------------------------
+
+    /** Candidate classes that may host a recall/revoke event handler, ordered by likelihood. */
+    private static final String[] RECALL_CLASS_CANDIDATES = {
+            // Primary path: DingTalk 8.x
+            "com.alibaba.android.rimet.biz.session.convmsg.ConvMsgService",
+            // Seen in some 7.x / 8.x builds
+            "com.alibaba.android.rimet.biz.session.receiver.IMConversationReceiver",
+            // Modular architecture (laiwang message layer)
+            "com.laiwang.android.message.lib.processor.MsgRevokeProcessor",
+            // Helper utility
+            "com.alibaba.android.rimet.biz.session.helper.MessageRevokeHelper",
+            // Additional candidates following DingTalk's naming conventions
+            "com.alibaba.android.rimet.biz.session.service.ConversationService",
+            "com.alibaba.android.rimet.biz.session.message.MessageEventHandler",
+            "com.alibaba.android.rimet.biz.im.service.IMService",
+            "com.alibaba.android.rimet.biz.chat.ChatMessageService",
+            "com.laiwang.android.message.lib.processor.MessageProcessor",
+    };
+
+    /**
+     * Method-name substrings that identify a recall/revoke event handler (case-insensitive).
+     * Any declared method whose lowercased name contains one of these tokens will be hooked.
+     */
+    private static final String[] RECALL_METHOD_PATTERNS = {
+            "revoke", "recall", "withdraw", "retract", "unsend",
+    };
+
+    // -----------------------------------------------------------------------
+    // Red-packet: candidate classes + method-name patterns (抢红包)
+    //
+    // The arrival-callback scanner hooks any method that looks like a "new red
+    // packet received" notification, so it continues to work even if DingTalk
+    // renames the callback in a future build.
+    // -----------------------------------------------------------------------
+
+    /** Candidate classes that may host a red-packet arrival callback, ordered by likelihood. */
+    private static final String[] HONGBAO_CLASS_CANDIDATES = {
+            // Primary path: DingTalk 8.x
+            "com.alibaba.android.rimet.biz.hbmanager.HongBaoManagerImpl",
+            // Push notification handler
+            "com.alibaba.android.rimet.biz.hbmanager.HongBaoPushHandler",
+            // Utility layer (seen in some builds)
+            "com.alibaba.android.dingtalkbase.multidexsupport.components.hb.HongBaoHelper",
+            // Component architecture
+            "com.alibaba.android.dingtalkbase.multidexsupport.components.hb.HongBaoComponent",
+            // Additional candidates following DingTalk's naming conventions
+            "com.alibaba.android.rimet.biz.hbmanager.HongBaoManager",
+            "com.alibaba.android.rimet.biz.hbmanager.HongBaoService",
+            "com.alibaba.android.rimet.biz.hbmanager.RedPacketManagerImpl",
+            "com.alibaba.android.rimet.biz.hbmanager.HbManagerImpl",
+            "com.laiwang.android.hongbao.HongBaoProcessor",
+    };
 
     private DingTalkDeepHookPlugin() {
     }
@@ -526,61 +589,38 @@ public class DingTalkDeepHookPlugin {
     // -----------------------------------------------------------------------
 
     /**
-     * Hooks the recall-event processor(s) in DingTalk 8.x.
+     * Hooks the recall-event processor(s) across all DingTalk versions.
      *
-     * <p>Multiple candidate class / method names are tried in sequence.  Each
-     * attempt is individually wrapped in try/catch so a failure in one attempt
-     * does not prevent the others from running.  The hooks intercept the method
-     * <em>before</em> it executes and return {@code null} immediately (skipping
-     * the original call) when anti-recall is enabled.</p>
+     * <p>For each class in {@link #RECALL_CLASS_CANDIDATES}, every declared method whose
+     * name contains a recall/revoke keyword (see {@link #RECALL_METHOD_PATTERNS}) is
+     * hooked.  This pattern-based scan automatically adapts when DingTalk renames the
+     * method in a future build — no manual update required.</p>
      */
     private static void hookAntiRecall(XposedModule module, ClassLoader classLoader) {
-
-        // Candidate 1 — ConvMsgService.onRevokeMsg (DingTalk 8.x primary path)
-        tryHookAntiRecallMethod(module, classLoader,
-                "com.alibaba.android.rimet.biz.session.convmsg.ConvMsgService",
-                "onRevokeMsg");
-
-        // Candidate 2 — alternate method name in the same class
-        tryHookAntiRecallMethod(module, classLoader,
-                "com.alibaba.android.rimet.biz.session.convmsg.ConvMsgService",
-                "revokeMsg");
-
-        // Candidate 3 — IMConversationReceiver (seen in some 7.x / 8.x builds)
-        tryHookAntiRecallMethod(module, classLoader,
-                "com.alibaba.android.rimet.biz.session.receiver.IMConversationReceiver",
-                "onRevokeMsg");
-
-        // Candidate 4 — message revoke processor (modular architecture)
-        tryHookAntiRecallMethod(module, classLoader,
-                "com.laiwang.android.message.lib.processor.MsgRevokeProcessor",
-                "process");
-
-        // Candidate 5 — revoke helper utility
-        tryHookAntiRecallMethod(module, classLoader,
-                "com.alibaba.android.rimet.biz.session.helper.MessageRevokeHelper",
-                "revokeMessage");
+        for (String className : RECALL_CLASS_CANDIDATES) {
+            tryHookAntiRecallClass(module, classLoader, className);
+        }
     }
 
     /**
-     * Attempts to hook every declared method with the given name on the given class.
-     * Skips silently if the class or method cannot be found.
+     * Scans all declared methods of the given class and hooks every method whose name
+     * contains a recall/revoke keyword.  Skips silently if the class is not found.
      */
-    private static void tryHookAntiRecallMethod(XposedModule module, ClassLoader classLoader,
-            String className, String methodName) {
+    private static void tryHookAntiRecallClass(XposedModule module, ClassLoader classLoader,
+            String className) {
         try {
             Class<?> cls = classLoader.loadClass(className);
             boolean hooked = false;
             for (Method m : cls.getDeclaredMethods()) {
-                if (!methodName.equals(m.getName())) continue;
+                if (!matchesAny(m.getName(), RECALL_METHOD_PATTERNS)) continue;
                 m.setAccessible(true);
+                final String methodName = m.getName();
                 module.hook(m).intercept(chain -> {
                     if (!SystemHookPlugin.getBoolFlag(module, Constant.XFlag.ENABLE_ANTI_RECALL)) {
                         return chain.proceed();
                     }
                     module.log(Log.INFO, TAG,
-                            "AntiRecall: blocked " + chain.getMethod().getName()
-                                    + " in " + className);
+                            "AntiRecall: blocked " + methodName + " in " + className);
                     // Return null / 0 / false depending on return type to satisfy callers.
                     Class<?> returnType = chain.getMethod().getReturnType();
                     if (returnType == boolean.class || returnType == Boolean.class) return false;
@@ -591,14 +631,12 @@ public class DingTalkDeepHookPlugin {
                 hooked = true;
             }
             if (hooked) {
-                module.log(Log.INFO, TAG,
-                        "hookAntiRecall installed: " + className + "#" + methodName);
+                module.log(Log.INFO, TAG, "hookAntiRecall installed on: " + className);
             }
         } catch (ClassNotFoundException e) {
             // Class absent in this DingTalk version — skip silently.
         } catch (Throwable e) {
-            module.log(Log.WARN, TAG,
-                    "hookAntiRecall failed for " + className + "#" + methodName, e);
+            module.log(Log.WARN, TAG, "hookAntiRecall error for " + className, e);
         }
     }
 
@@ -608,53 +646,37 @@ public class DingTalkDeepHookPlugin {
     // -----------------------------------------------------------------------
 
     /**
-     * Hooks the red-packet arrival callback(s) in DingTalk 8.x.
+     * Hooks the red-packet arrival callback(s) across all DingTalk versions.
      *
-     * <p>When enabled the hook calls the "open/grab" action on the HongBao
-     * manager immediately after the arrival event fires, simulating the user
-     * tapping the red packet envelope.</p>
+     * <p>For each class in {@link #HONGBAO_CLASS_CANDIDATES}, every declared method that
+     * looks like a "new red packet arrived" notification (see {@link #isHongBaoArrivalMethod})
+     * is hooked.  This pattern-based scan automatically adapts when DingTalk renames the
+     * callback in a future build — no manual update required.</p>
+     *
+     * <p>When enabled the hook calls the "open/grab" action on the HongBao manager
+     * immediately after the arrival event fires, simulating the user tapping the
+     * red packet envelope.</p>
      */
     private static void hookRedPacket(XposedModule module, ClassLoader classLoader) {
-
-        // Candidate 1 — HongBaoManagerImpl (DingTalk 8.x primary path)
-        tryHookRedPacketReceive(module, classLoader,
-                "com.alibaba.android.rimet.biz.hbmanager.HongBaoManagerImpl",
-                "onReceiveNewHb");
-
-        // Candidate 2 — alternate arrival method name
-        tryHookRedPacketReceive(module, classLoader,
-                "com.alibaba.android.rimet.biz.hbmanager.HongBaoManagerImpl",
-                "onReceiveHongBao");
-
-        // Candidate 3 — HongBaoHelper (utility layer)
-        tryHookRedPacketReceive(module, classLoader,
-                "com.alibaba.android.dingtalkbase.multidexsupport.components.hb.HongBaoHelper",
-                "onNewHongBao");
-
-        // Candidate 4 — HongBaoComponent (component architecture)
-        tryHookRedPacketReceive(module, classLoader,
-                "com.alibaba.android.dingtalkbase.multidexsupport.components.hb.HongBaoComponent",
-                "receiveHongBao");
-
-        // Candidate 5 — push notification handler for red packets
-        tryHookRedPacketReceive(module, classLoader,
-                "com.alibaba.android.rimet.biz.hbmanager.HongBaoPushHandler",
-                "onNewHongBao");
+        for (String className : HONGBAO_CLASS_CANDIDATES) {
+            tryHookRedPacketClass(module, classLoader, className);
+        }
     }
 
     /**
-     * Attempts to hook every declared method with the given name and registers an
-     * after-hook that calls the first reachable "open/grab" method on {@code this}
-     * (the manager instance) when red-packet grabbing is enabled.
+     * Scans all declared methods of the given class and hooks every method that looks
+     * like a "new red packet arrived" event callback.  Skips silently if the class is
+     * not found.
      */
-    private static void tryHookRedPacketReceive(XposedModule module, ClassLoader classLoader,
-            String className, String methodName) {
+    private static void tryHookRedPacketClass(XposedModule module, ClassLoader classLoader,
+            String className) {
         try {
             Class<?> cls = classLoader.loadClass(className);
             boolean hooked = false;
             for (Method m : cls.getDeclaredMethods()) {
-                if (!methodName.equals(m.getName())) continue;
+                if (!isHongBaoArrivalMethod(m.getName())) continue;
                 m.setAccessible(true);
+                final String methodName = m.getName();
                 module.hook(m).intercept(chain -> {
                     // Let the original method run first so the HongBao is registered.
                     Object result = chain.proceed();
@@ -662,8 +684,7 @@ public class DingTalkDeepHookPlugin {
                         return result;
                     }
                     module.log(Log.INFO, TAG,
-                            "RedPacket: auto-grabbing after " + chain.getMethod().getName()
-                                    + " in " + className);
+                            "RedPacket: auto-grabbing after " + methodName + " in " + className);
                     // Attempt to invoke grab/open on the same object instance.
                     Object thiz = chain.getThisObject();
                     if (thiz != null) {
@@ -674,15 +695,57 @@ public class DingTalkDeepHookPlugin {
                 hooked = true;
             }
             if (hooked) {
-                module.log(Log.INFO, TAG,
-                        "hookRedPacket installed: " + className + "#" + methodName);
+                module.log(Log.INFO, TAG, "hookRedPacket installed on: " + className);
             }
         } catch (ClassNotFoundException e) {
             // Class absent — skip silently.
         } catch (Throwable e) {
-            module.log(Log.WARN, TAG,
-                    "hookRedPacket failed for " + className + "#" + methodName, e);
+            module.log(Log.WARN, TAG, "hookRedPacket error for " + className, e);
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Shared pattern-matching helpers
+    // -----------------------------------------------------------------------
+
+    /**
+     * Returns {@code true} if {@code name} (case-insensitive) contains any of the given tokens.
+     */
+    private static boolean matchesAny(String name, String[] tokens) {
+        String lower = name.toLowerCase(Locale.US);
+        for (String token : tokens) {
+            if (lower.contains(token)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Heuristic: returns {@code true} when a method name looks like a "new red packet
+     * arrived" callback.
+     *
+     * <p>Rules (evaluated on the lower-cased method name):</p>
+     * <ul>
+     *   <li>Contains a red-packet keyword ({@code hongbao}, {@code redpacket}, …) AND
+     *       an arrival keyword ({@code new}, {@code receiv}, {@code push}, {@code arriv},
+     *       {@code notif}).</li>
+     *   <li>OR contains the short keyword {@code hb} AND an arrival keyword.</li>
+     *   <li>OR starts with {@code "on"} and ends with {@code "hb"} (e.g. {@code onHb}).</li>
+     * </ul>
+     *
+     * <p>This deliberately excludes "open/grab" methods ({@code openHongBao}, {@code grabHb},
+     * etc.) because they contain none of the arrival keywords.</p>
+     */
+    private static boolean isHongBaoArrivalMethod(String name) {
+        String lower = name.toLowerCase(Locale.US);
+        boolean hasHbWord   = lower.contains("hongbao") || lower.contains("redpacket")
+                           || lower.contains("red_packet");
+        boolean hasHbShort  = lower.contains("hb");
+        boolean hasArrival  = lower.contains("new")    || lower.contains("receiv")
+                           || lower.contains("push")   || lower.contains("arriv")
+                           || lower.contains("notif");
+        // Short-form callbacks: "onHb" — starts with "on", ends with "hb"
+        boolean isOnHbShort = lower.startsWith("on") && lower.endsWith("hb");
+        return (hasHbWord && hasArrival) || (hasHbShort && hasArrival) || isOnHbShort;
     }
 
     /** Candidate "open/grab" method names tried in order on the HongBao manager instance. */
