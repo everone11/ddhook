@@ -134,6 +134,35 @@ public class DingTalkDeepHookPlugin {
             "com.laiwang.android.hongbao.HongBaoProcessor",
     };
 
+    // -----------------------------------------------------------------------
+    // Virtual-location: candidate DingTalk-internal location proxy classes
+    // (虚拟定位)
+    //
+    // When DingTalk renames or refactors its internal AMap wrapper classes
+    // (e.g. GMapLocation, LocationProxy), the APK analysis workflow detects
+    // the new class names and scripts/generate_version_config.py appends them
+    // here.  hookLocationCandidates() applies coordinate and dispatch hooks
+    // automatically for every class in this list.
+    // -----------------------------------------------------------------------
+
+    /**
+     * Candidate DingTalk-internal location wrapper / proxy classes.
+     *
+     * <ul>
+     *   <li>Classes that subclass {@code android.location.Location} and declare
+     *       {@code getLatitude}/{@code getLongitude}/{@code setLatitude}/{@code setLongitude}
+     *       — coordinate getter/setter hooks are applied.</li>
+     *   <li>Classes with an {@code onLocationChanged(AMapLocation)} method
+     *       — the AMapLocation arg is patched before being forwarded.</li>
+     * </ul>
+     */
+    private static final String[] LOCATION_CLASS_CANDIDATES = {
+            // DingTalk 8.x: GMapLocation (android.location.Location subclass)
+            "com.alibaba.android.dingtalkbase.amap.GMapLocation",
+            // DingTalk 8.x: LocationProxy (dispatches AMapLocation to DingTalk internals)
+            "com.alibaba.android.dingtalkbase.amap.LocationProxy",
+    };
+
     private DingTalkDeepHookPlugin() {
     }
 
@@ -159,8 +188,7 @@ public class DingTalkDeepHookPlugin {
      * @param classLoader the DingTalk process class loader.
      */
     public static void setup(XposedModule module, ClassLoader classLoader) {
-        hookGMapLocation(module, classLoader);
-        hookLocationProxy(module, classLoader);
+        hookLocationCandidates(module, classLoader);
         hookAMapLocationClient(module, classLoader);
         hookAopWifiManager(module, classLoader);
         hookInitSecurityGuardRuntimeBase(module, classLoader);
@@ -213,158 +241,187 @@ public class DingTalkDeepHookPlugin {
 
 
     // -----------------------------------------------------------------------
-    // GMapLocation — DingTalk's Location subclass
+    // Virtual-location candidates scanner — replaces the old hard-coded
+    // hookGMapLocation + hookLocationProxy methods.
     // -----------------------------------------------------------------------
 
-    private static void hookGMapLocation(XposedModule module, ClassLoader classLoader) {
+    /**
+     * Hooks DingTalk-internal location wrapper/proxy classes listed in
+     * {@link #LOCATION_CLASS_CANDIDATES}.
+     *
+     * <p>For each candidate class the scanner looks for:</p>
+     * <ul>
+     *   <li>{@code getLatitude}/{@code getLongitude} — returns the configured fake coordinate.</li>
+     *   <li>{@code setLatitude}/{@code setLongitude} — replaces the argument so the cached
+     *       value inside the object is also spoofed.</li>
+     *   <li>{@code onLocationChanged(AMapLocation)} — patches the {@code AMapLocation} arg's
+     *       coordinates before the DingTalk pipeline processes them.</li>
+     * </ul>
+     *
+     * <p>New class names discovered during APK decompilation are appended to
+     * {@link #LOCATION_CLASS_CANDIDATES} by {@code scripts/generate_version_config.py}.</p>
+     */
+    private static void hookLocationCandidates(XposedModule module, ClassLoader classLoader) {
+        // Pre-load AMapLocation setters needed for onLocationChanged patching.
+        Method setLatMethod = null;
+        Method setLonMethod = null;
+        Class<?> aMapLocationCls = null;
         try {
-            Class<?> cls = classLoader.loadClass(
-                    "com.alibaba.android.dingtalkbase.amap.GMapLocation");
-
-            Method getLatitude = cls.getMethod("getLatitude");
-            module.hook(getLatitude).intercept(chain -> {
-                SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
-                if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
-                String val = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
-                if (val.isEmpty()) return chain.proceed();
-                try {
-                    SystemHookPlugin.logSpoofed(module, "GMapLocation#getLatitude");
-                    double baseLat = Double.parseDouble(val);
-                    String lonVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
-                    String offVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
-                    if (lonVal.isEmpty() || offVal.isEmpty()) return baseLat;
-                    return SystemHookPlugin.getEffectiveCoords(
-                            baseLat, Double.parseDouble(lonVal), Double.parseDouble(offVal))[0];
-                } catch (NumberFormatException e) {
-                    return chain.proceed();
-                }
-            });
-
-            Method getLongitude = cls.getMethod("getLongitude");
-            module.hook(getLongitude).intercept(chain -> {
-                SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
-                if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
-                String val = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
-                if (val.isEmpty()) return chain.proceed();
-                try {
-                    SystemHookPlugin.logSpoofed(module, "GMapLocation#getLongitude");
-                    double baseLon = Double.parseDouble(val);
-                    String latVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
-                    String offVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
-                    if (latVal.isEmpty() || offVal.isEmpty()) return baseLon;
-                    return SystemHookPlugin.getEffectiveCoords(
-                            Double.parseDouble(latVal), baseLon, Double.parseDouble(offVal))[1];
-                } catch (NumberFormatException e) {
-                    return chain.proceed();
-                }
-            });
-
-            Method setLatitude = cls.getMethod("setLatitude", double.class);
-            module.hook(setLatitude).intercept(chain -> {
-                SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
-                if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
-                String val = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
-                if (val.isEmpty()) return chain.proceed();
-                try {
-                    double baseLat = Double.parseDouble(val);
-                    String lonVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
-                    String offVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
-                    if (lonVal.isEmpty() || offVal.isEmpty()) return chain.proceed(new Object[]{baseLat});
-                    double effectiveLat = SystemHookPlugin.getEffectiveCoords(
-                            baseLat, Double.parseDouble(lonVal), Double.parseDouble(offVal))[0];
-                    return chain.proceed(new Object[]{effectiveLat});
-                } catch (NumberFormatException e) {
-                    return chain.proceed();
-                }
-            });
-
-            Method setLongitude = cls.getMethod("setLongitude", double.class);
-            module.hook(setLongitude).intercept(chain -> {
-                SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
-                if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
-                String val = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
-                if (val.isEmpty()) return chain.proceed();
-                try {
-                    double baseLon = Double.parseDouble(val);
-                    String latVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
-                    String offVal = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
-                    if (latVal.isEmpty() || offVal.isEmpty()) return chain.proceed(new Object[]{baseLon});
-                    double effectiveLon = SystemHookPlugin.getEffectiveCoords(
-                            Double.parseDouble(latVal), baseLon, Double.parseDouble(offVal))[1];
-                    return chain.proceed(new Object[]{effectiveLon});
-                } catch (NumberFormatException e) {
-                    return chain.proceed();
-                }
-            });
-
-            module.log(Log.INFO, TAG, "hookGMapLocation installed");
+            aMapLocationCls = classLoader.loadClass("com.amap.api.location.AMapLocation");
+            setLatMethod = aMapLocationCls.getMethod("setLatitude", double.class);
+            setLonMethod = aMapLocationCls.getMethod("setLongitude", double.class);
         } catch (Throwable e) {
-            module.log(Log.WARN, TAG, "hookGMapLocation failed", e);
+            module.log(Log.WARN, TAG,
+                    "hookLocationCandidates: AMapLocation not available — onLocationChanged hooks skipped");
+        }
+        final Class<?> aMapCls = aMapLocationCls;
+        final Method setLat = setLatMethod;
+        final Method setLon = setLonMethod;
+
+        for (String className : LOCATION_CLASS_CANDIDATES) {
+            try {
+                Class<?> cls = classLoader.loadClass(className);
+                boolean hooked = false;
+                for (Method m : cls.getDeclaredMethods()) {
+                    m.setAccessible(true);
+                    switch (m.getName()) {
+                        case "getLatitude":
+                            hookCoordGetter(module, m, className, true);
+                            hooked = true;
+                            break;
+                        case "getLongitude":
+                            hookCoordGetter(module, m, className, false);
+                            hooked = true;
+                            break;
+                        case "setLatitude":
+                            if (m.getParameterCount() == 1) {
+                                hookCoordSetter(module, m, className, true);
+                                hooked = true;
+                            }
+                            break;
+                        case "setLongitude":
+                            if (m.getParameterCount() == 1) {
+                                hookCoordSetter(module, m, className, false);
+                                hooked = true;
+                            }
+                            break;
+                        case "onLocationChanged":
+                            if (m.getParameterCount() == 1 && aMapCls != null
+                                    && aMapCls.isAssignableFrom(m.getParameterTypes()[0])) {
+                                hookOnLocationChangedMethod(module, m, className, setLat, setLon);
+                                hooked = true;
+                            }
+                            break;
+                    }
+                }
+                if (hooked) {
+                    module.log(Log.INFO, TAG,
+                            "hookLocationCandidates installed on: " + className);
+                }
+            } catch (ClassNotFoundException e) {
+                // Class absent in this DingTalk version — skip silently.
+            } catch (Throwable e) {
+                module.log(Log.WARN, TAG,
+                        "hookLocationCandidates error for " + className, e);
+            }
         }
     }
 
-    // -----------------------------------------------------------------------
-    // LocationProxy — intercepts AMapLocation before DingTalk caches it
-    // -----------------------------------------------------------------------
-
-    private static void hookLocationProxy(XposedModule module, ClassLoader classLoader) {
-        try {
-            Class<?> aMapLocationCls = classLoader.loadClass(
-                    "com.amap.api.location.AMapLocation");
-            Class<?> proxyCls = classLoader.loadClass(
-                    "com.alibaba.android.dingtalkbase.amap.LocationProxy");
-
-            // Cache the setter Methods for reuse on every onLocationChanged call.
-            final Method setLat = aMapLocationCls.getMethod("setLatitude", double.class);
-            final Method setLon = aMapLocationCls.getMethod("setLongitude", double.class);
-
-            Method onLocationChanged = proxyCls.getMethod(
-                    "onLocationChanged", aMapLocationCls);
-
-            module.hook(onLocationChanged).intercept(chain -> {
-                SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
-                if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
-
-                Object aMapLocation = chain.getArg(0);
-                if (aMapLocation == null) return chain.proceed();
-
-                // Apply lat/lon overrides with random offset.
-                String latStr = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
-                String lonStr = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
-                String offStr = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
-                boolean patched = false;
-                try {
-                    double[] coords = null;
-                    if (!latStr.isEmpty() && !lonStr.isEmpty() && !offStr.isEmpty()) {
-                        coords = SystemHookPlugin.getEffectiveCoords(
-                                Double.parseDouble(latStr), Double.parseDouble(lonStr),
-                                Double.parseDouble(offStr));
-                    }
-                    if (!latStr.isEmpty()) {
-                        double lat = (coords != null) ? coords[0] : Double.parseDouble(latStr);
-                        setLat.invoke(aMapLocation, lat);
-                        patched = true;
-                    }
-                    if (!lonStr.isEmpty()) {
-                        double lon = (coords != null) ? coords[1] : Double.parseDouble(lonStr);
-                        setLon.invoke(aMapLocation, lon);
-                        patched = true;
-                    }
-                } catch (Exception ignored) {
-                    // Reflection failure — proceed with original location.
-                }
-                if (patched) {
-                    SystemHookPlugin.logSpoofed(module, "LocationProxy#onLocationChanged");
-                }
+    /** Hooks a {@code getLatitude()}/{@code getLongitude()} method to return the fake coordinate. */
+    private static void hookCoordGetter(XposedModule module, Method m,
+            String className, boolean isLat) {
+        final String coordFlag = isLat ? Constant.XFlag.LATITUDE  : Constant.XFlag.LONGITUDE;
+        final String otherFlag = isLat ? Constant.XFlag.LONGITUDE : Constant.XFlag.LATITUDE;
+        final String logTag    = className + "#" + m.getName();
+        module.hook(m).intercept(chain -> {
+            SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
+            if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
+            String val = SystemHookPlugin.getString(prefs, coordFlag);
+            if (val.isEmpty()) return chain.proceed();
+            try {
+                double base  = Double.parseDouble(val);
+                String other = SystemHookPlugin.getString(prefs, otherFlag);
+                String off   = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
+                SystemHookPlugin.logSpoofed(module, logTag);
+                if (other.isEmpty() || off.isEmpty()) return base;
+                double[] coords = SystemHookPlugin.getEffectiveCoords(
+                        isLat ? base                      : Double.parseDouble(other),
+                        isLat ? Double.parseDouble(other) : base,
+                        Double.parseDouble(off));
+                return isLat ? coords[0] : coords[1];
+            } catch (NumberFormatException e) {
                 return chain.proceed();
-            });
-
-            module.log(Log.INFO, TAG, "hookLocationProxy installed");
-        } catch (Throwable e) {
-            module.log(Log.WARN, TAG, "hookLocationProxy failed", e);
-        }
+            }
+        });
     }
 
+    /**
+     * Hooks a {@code setLatitude(double)}/{@code setLongitude(double)} method to replace
+     * the argument with the configured fake coordinate (random offset applied if set).
+     */
+    private static void hookCoordSetter(XposedModule module, Method m,
+            String className, boolean isLat) {
+        final String coordFlag = isLat ? Constant.XFlag.LATITUDE  : Constant.XFlag.LONGITUDE;
+        final String otherFlag = isLat ? Constant.XFlag.LONGITUDE : Constant.XFlag.LATITUDE;
+        module.hook(m).intercept(chain -> {
+            SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
+            if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
+            String val = SystemHookPlugin.getString(prefs, coordFlag);
+            if (val.isEmpty()) return chain.proceed();
+            try {
+                double base  = Double.parseDouble(val);
+                String other = SystemHookPlugin.getString(prefs, otherFlag);
+                String off   = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
+                if (other.isEmpty() || off.isEmpty()) return chain.proceed(new Object[]{base});
+                double[] coords = SystemHookPlugin.getEffectiveCoords(
+                        isLat ? base                      : Double.parseDouble(other),
+                        isLat ? Double.parseDouble(other) : base,
+                        Double.parseDouble(off));
+                return chain.proceed(new Object[]{isLat ? coords[0] : coords[1]});
+            } catch (NumberFormatException e) {
+                return chain.proceed();
+            }
+        });
+    }
+
+    /**
+     * Hooks an {@code onLocationChanged(AMapLocation)} method to patch the
+     * AMapLocation arg's coordinates before the DingTalk pipeline processes them.
+     */
+    private static void hookOnLocationChangedMethod(XposedModule module, Method m,
+            String className, Method setLatMethod, Method setLonMethod) {
+        final String logTag = className + "#onLocationChanged";
+        module.hook(m).intercept(chain -> {
+            SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
+            if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
+            Object aMapLocation = chain.getArg(0);
+            if (aMapLocation == null) return chain.proceed();
+            String latStr = SystemHookPlugin.getString(prefs, Constant.XFlag.LATITUDE);
+            String lonStr = SystemHookPlugin.getString(prefs, Constant.XFlag.LONGITUDE);
+            String offStr = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
+            boolean patched = false;
+            try {
+                double[] coords = null;
+                if (!latStr.isEmpty() && !lonStr.isEmpty() && !offStr.isEmpty()) {
+                    coords = SystemHookPlugin.getEffectiveCoords(
+                            Double.parseDouble(latStr), Double.parseDouble(lonStr),
+                            Double.parseDouble(offStr));
+                }
+                if (!latStr.isEmpty() && setLatMethod != null) {
+                    double lat = (coords != null) ? coords[0] : Double.parseDouble(latStr);
+                    setLatMethod.invoke(aMapLocation, lat);
+                    patched = true;
+                }
+                if (!lonStr.isEmpty() && setLonMethod != null) {
+                    double lon = (coords != null) ? coords[1] : Double.parseDouble(lonStr);
+                    setLonMethod.invoke(aMapLocation, lon);
+                    patched = true;
+                }
+            } catch (Exception ignored) { }
+            if (patched) SystemHookPlugin.logSpoofed(module, logTag);
+            return chain.proceed();
+        });
+    }
     // -----------------------------------------------------------------------
     // AMapLocationClient — intercepts location at the AMap SDK layer
     // -----------------------------------------------------------------------
@@ -813,6 +870,32 @@ public class DingTalkDeepHookPlugin {
     public static List<String> probeAdaptation(ClassLoader classLoader) {
         List<String> results = new ArrayList<>();
 
+        results.add("── 虚拟定位 (Virtual Location) ──");
+        for (String className : LOCATION_CLASS_CANDIDATES) {
+            String simpleClass = simpleClassName(className);
+            try {
+                Class<?> cls = classLoader.loadClass(className);
+                List<String> found = new ArrayList<>();
+                for (Method m : cls.getDeclaredMethods()) {
+                    switch (m.getName()) {
+                        case "getLatitude": case "getLongitude":
+                        case "setLatitude": case "setLongitude":
+                        case "onLocationChanged":
+                            found.add(m.getName());
+                            break;
+                    }
+                }
+                if (found.isEmpty()) {
+                    results.add("△ " + simpleClass + " (无坐标/回调方法)");
+                } else {
+                    results.add("✓ " + simpleClass + ": " + String.join(", ", found));
+                }
+            } catch (ClassNotFoundException e) {
+                results.add("✗ " + simpleClass);
+            }
+        }
+
+        results.add("");
         results.add("── 消息防撤回 (Anti-Recall) ──");
         for (String className : RECALL_CLASS_CANDIDATES) {
             results.add(probeClass(classLoader, className, RECALL_METHOD_PATTERNS,
