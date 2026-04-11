@@ -40,6 +40,7 @@ public final class M {
         /**
          * DingTalk 8.3.0+ — "OneSettingActivity" is the new unified main settings entry point,
          * replacing the older "NewSettingActivity" that no longer exists in 8.3.0.
+         * ID 0x1f00000F is intentionally reserved for future use.
          */
         public static final int class_android_user_settings_activity_OneSettingActivity = 0x1f00000E;
 
