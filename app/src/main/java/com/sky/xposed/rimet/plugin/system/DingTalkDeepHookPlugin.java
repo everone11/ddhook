@@ -108,6 +108,9 @@ public class DingTalkDeepHookPlugin {
     // LightAppRuntimeReverseInterface (com.alibaba.dingtalk.runtimebase) —
     // second implementation of initSecurityGuard found in DingTalk 8.3.0.
     // Verified via APK decompilation artifact (class_names_8.3.0.txt).
+    // Hooked directly via classLoader.loadClass() (not via versioned config),
+    // so it runs alongside the DingDingPlugin config-based hook for the
+    // com.alibaba.lightapp.runtime variant.
     // -----------------------------------------------------------------------
 
     private static void hookInitSecurityGuardRuntimeBase(XposedModule module, ClassLoader classLoader) {
@@ -682,6 +685,10 @@ public class DingTalkDeepHookPlugin {
         }
     }
 
+    /** Candidate "open/grab" method names tried in order on the HongBao manager instance. */
+    private static final String[] GRAB_METHOD_NAMES =
+            {"openHongBao", "grabHongBao", "receiveHb", "openHb", "grabHb"};
+
     /**
      * Tries to call a "grab/open" method on the HongBao manager instance.
      * Candidate method names are tried in order; the first one that succeeds wins.
@@ -691,10 +698,9 @@ public class DingTalkDeepHookPlugin {
      * @param args   the original method arguments (may carry HongBao ID / conversation info).
      */
     private static void invokeGrabMethod(XposedModule module, Object thiz, Object[] args) {
-        String[] grabNames = {"openHongBao", "grabHongBao", "receiveHb", "openHb", "grabHb"};
         // Cache declared methods once to avoid repeated O(n) reflection lookups.
         Method[] methods = thiz.getClass().getDeclaredMethods();
-        for (String name : grabNames) {
+        for (String name : GRAB_METHOD_NAMES) {
             for (Method m : methods) {
                 if (!name.equals(m.getName())) continue;
                 try {

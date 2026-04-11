@@ -40,7 +40,7 @@ public class RimetConfig830 extends RimetConfig {
     @Override
     public void loadConfig() {
 
-        /** Class */
+        // Class name mappings for DingTalk 8.3.0
         add(M.classz.class_rimet_LauncherApplication,
                 "com.alibaba.android.rimet.LauncherApplication");
         add(M.classz.class_dingtalkbase_multidexsupport_DDApplication,
@@ -65,7 +65,7 @@ public class RimetConfig830 extends RimetConfig {
         add(M.classz.class_rimet_biz_hbmanager_HongBaoManagerImpl,
                 "com.alibaba.android.rimet.biz.hbmanager.HongBaoManagerImpl");
 
-        /** Method */
+        // Method name mappings for DingTalk 8.3.0
         add(M.method.method_lightapp_runtime_LightAppRuntimeReverseInterfaceImpl_initSecurityGuard,
                 "initSecurityGuard");
         add(M.method.method_android_user_settings_activity_OneSettingActivity_onCreate,
