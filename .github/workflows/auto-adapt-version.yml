@@ -96,34 +96,39 @@ jobs:
 
           git push origin "$BRANCH"
 
+          # Build the PR body in a temp file to avoid YAML indentation issues.
+          {
+            echo "## Auto-adaptation for DingTalk ${VERSION}"
+            echo ""
+            echo "This PR was generated automatically by the **Auto-Adapt DingTalk Version** workflow"
+            echo "after the **Analyze DingTalk APK** workflow completed for version \`${VERSION}\`."
+            echo ""
+            echo "### Changes"
+            echo "- \`RimetConfig${NORMALIZED}.java\` — new version-specific class/method mappings"
+            echo "- \`VersionManager.java\` — registers \`${VERSION}\` → \`RimetConfig${NORMALIZED}\`"
+            echo "- \`DingTalkDeepHookPlugin.java\` — newly discovered candidate classes appended to:"
+            echo "  - \`LOCATION_CLASS_CANDIDATES\` (虚拟定位 / virtual location)"
+            echo "  - \`RECALL_CLASS_CANDIDATES\` (消息防撤回 / anti-recall)"
+            echo "  - \`HONGBAO_CLASS_CANDIDATES\` (抢红包 / red-packet)"
+            echo ""
+            echo "### Features adapted"
+            echo "| Feature | Status |"
+            echo "|---|---|"
+            echo "| 虚拟定位 (Virtual location) | ✓ GMapLocation / LocationProxy candidates updated |"
+            echo "| 消息防撤回 (Anti-recall) | ✓ recall/revoke class candidates updated |"
+            echo "| 抢红包 (Red-packet) | ✓ HongBao manager candidates updated |"
+            echo ""
+            echo "### Build"
+            echo "The **Build Android APK** workflow will run automatically on this PR."
+            echo "Review the generated config, then merge to produce the final module APK."
+            echo ""
+            echo "> Source analysis run: ${{ github.event.workflow_run.html_url }}"
+          } > /tmp/pr_body.md
+
           # Create PR (idempotent: gh pr create exits 0 if PR already exists)
           gh pr create \
             --base main \
             --head "$BRANCH" \
             --title "feat: auto-adapt DingTalk ${VERSION}" \
-            --body "## Auto-adaptation for DingTalk ${VERSION}
-
-This PR was generated automatically by the **Auto-Adapt DingTalk Version** workflow
-after the **Analyze DingTalk APK** workflow completed for version \`${VERSION}\`.
-
-### Changes
-- \`RimetConfig${NORMALIZED}.java\` — new version-specific class/method mappings
-- \`VersionManager.java\` — registers \`${VERSION}\` → \`RimetConfig${NORMALIZED}\`
-- \`DingTalkDeepHookPlugin.java\` — newly discovered candidate classes appended to:
-  - \`LOCATION_CLASS_CANDIDATES\` (虚拟定位 / virtual location)
-  - \`RECALL_CLASS_CANDIDATES\` (消息防撤回 / anti-recall)
-  - \`HONGBAO_CLASS_CANDIDATES\` (抢红包 / red-packet)
-
-### Features adapted
-| Feature | Status |
-|---|---|
-| 虚拟定位 (Virtual location) | ✓ GMapLocation / LocationProxy candidates updated |
-| 消息防撤回 (Anti-recall) | ✓ recall/revoke class candidates updated |
-| 抢红包 (Red-packet) | ✓ HongBao manager candidates updated |
-
-### Build
-The **Build Android APK** workflow will run automatically on this PR.
-Review the generated config, then merge to produce the final module APK.
-
-> Source analysis run: ${{ github.event.workflow_run.html_url }}" \
+            --body-file /tmp/pr_body.md \
             || echo "PR already exists or creation skipped."
