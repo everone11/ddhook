@@ -119,6 +119,10 @@ public abstract class BasePlugin implements XPlugin {
     }
 
     protected HookHelper findMethod(String className, String methodName, Object... parameterTypes) {
+        if (className == null || className.isEmpty()) {
+            // Config key is not mapped for the current DingTalk version — skip silently.
+            return HookHelper.EMPTY;
+        }
         try {
             Class<?> clazz = mClassLoader.loadClass(className);
             return findMethod(clazz, methodName, parameterTypes);
