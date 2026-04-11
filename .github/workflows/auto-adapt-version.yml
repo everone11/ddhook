@@ -20,6 +20,7 @@ jobs:
     permissions:
       contents: write       # push the new branch
       pull-requests: write  # open the PR
+      actions: read         # cross-workflow artifact download
 
     steps:
       - name: Checkout repository
