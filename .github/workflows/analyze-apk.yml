@@ -113,7 +113,7 @@ jobs:
 
           echo "### Red-packet: onReceiveNewHb / onReceiveHongBao / openHongBao methods" >> $OUT
           grep -rn "onReceiveNewHb\|onReceiveHongBao\|openHongBao\|grabHongBao\|receiveHb\|openHb\|grabHb" /tmp/jadx-out --include="*.java" | \
-            grep -v "//\s*" | sed 's|.*/jadx-out/sources/||' | head -30 >> $OUT || true
+            grep -v "^\s*//" | sed 's|.*/jadx-out/sources/||' | head -30 >> $OUT || true
           echo "" >> $OUT
 
           echo "### alibaba package top-level structure" >> $OUT

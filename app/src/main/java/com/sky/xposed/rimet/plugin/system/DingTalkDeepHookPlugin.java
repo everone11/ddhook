@@ -124,7 +124,13 @@ public class DingTalkDeepHookPlugin {
                 for (Method m : cls.getDeclaredMethods()) {
                     if (!"initSecurityGuard".equals(m.getName())) continue;
                     m.setAccessible(true);
-                    module.hook(m).intercept(chain -> null);
+                    module.hook(m).intercept(chain -> {
+                        Class<?> returnType = chain.getMethod().getReturnType();
+                        if (returnType == boolean.class || returnType == Boolean.class) return false;
+                        if (returnType == int.class    || returnType == Integer.class)  return 0;
+                        if (returnType == long.class   || returnType == Long.class)     return 0L;
+                        return null; // void or Object
+                    });
                     module.log(Log.INFO, TAG,
                             "hookInitSecurityGuard installed: " + className);
                 }
@@ -698,14 +704,10 @@ public class DingTalkDeepHookPlugin {
                     if (m.getParameterCount() == 0) {
                         m.invoke(thiz);
                     } else if (m.getParameterCount() == args.length) {
-                        try {
-                            m.invoke(thiz, args);
-                        } catch (IllegalArgumentException e) {
-                            // Type mismatch — args have incompatible types for this overload.
-                            module.log(Log.DEBUG, TAG,
-                                    "RedPacket: " + name + " type mismatch, skipping", e);
-                            continue;
-                        }
+                        // IllegalArgumentException (type mismatch) is caught by the outer
+                        // Throwable catch; it will be logged and the loop will try the next
+                        // candidate rather than crashing.
+                        m.invoke(thiz, args);
                     } else {
                         continue; // Arity mismatch — try next candidate.
                     }
