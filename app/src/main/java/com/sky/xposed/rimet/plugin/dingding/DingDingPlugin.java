@@ -40,6 +40,7 @@ import com.sky.xposed.rimet.data.model.PluginInfo;
 import com.sky.xposed.rimet.plugin.base.BasePlugin;
 import com.sky.xposed.rimet.plugin.interfaces.XPlugin;
 import com.sky.xposed.rimet.plugin.interfaces.XPluginManager;
+import com.sky.xposed.rimet.plugin.system.DingTalkDeepHookPlugin;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -81,7 +82,7 @@ public class DingDingPlugin extends BasePlugin {
 
     @Override
     public void openSettings(Activity activity) {
-        showMainSettingsDialog(activity);
+        showMainSettingsDialog(activity, getClassLoader());
     }
 
     /**
@@ -92,9 +93,13 @@ public class DingDingPlugin extends BasePlugin {
      *   <li>消息防撤回 — anti-recall</li>
      *   <li>抢红包 — automatic red-packet grabbing</li>
      * </ul>
-     * and a button that opens the full virtual-location configuration dialog.</p>
+     * a button that opens the full virtual-location configuration dialog, and
+     * a "手动适应新版本" button that probes DingTalk's classes and shows the
+     * adaptation status in a scrollable result dialog.</p>
+     *
+     * @param classLoader the DingTalk process class loader (used for adaptation probe).
      */
-    private static void showMainSettingsDialog(Activity activity) {
+    private static void showMainSettingsDialog(Activity activity, ClassLoader classLoader) {
         if (activity == null || activity.isFinishing()) return;
 
         SharedPreferences prefs =
@@ -126,6 +131,13 @@ public class DingDingPlugin extends BasePlugin {
         btnLocation.setOnClickListener(v -> showLocationDialog(activity));
         layout.addView(btnLocation, rowParams(padV));
 
+        // ── 手动适应新版本 button ────────────────────────────────────────────
+        Button btnAdapt = new Button(activity);
+        btnAdapt.setText("手动适应新版本");
+        btnAdapt.setOnClickListener(v ->
+                showAdaptationResultDialog(activity, classLoader));
+        layout.addView(btnAdapt, rowParams(padV));
+
         new AlertDialog.Builder(activity)
                 .setTitle(Constant.Name.TITLE)
                 .setView(layout)
@@ -137,6 +149,50 @@ public class DingDingPlugin extends BasePlugin {
                                         cbRedPacket.isChecked())
                                 .apply())
                 .setNegativeButton("取消", null)
+                .show();
+    }
+
+    /**
+     * Runs {@link DingTalkDeepHookPlugin#probeAdaptation(ClassLoader)} and displays
+     * the result lines in a scrollable AlertDialog.
+     *
+     * <p>Each result line is prefixed with a status symbol:
+     * <ul>
+     *   <li>✓ — class found AND at least one matching hook method found</li>
+     *   <li>△ — class found but no matching method found (may need update)</li>
+     *   <li>✗ — class not present in this DingTalk version</li>
+     * </ul>
+     * </p>
+     */
+    private static void showAdaptationResultDialog(Activity activity, ClassLoader classLoader) {
+        if (activity == null || activity.isFinishing()) return;
+
+        List<String> results = DingTalkDeepHookPlugin.probeAdaptation(classLoader);
+
+        // Build a scrollable TextView to show all result lines.
+        ScrollView scrollView = new ScrollView(activity);
+        TextView tvResult = new TextView(activity);
+        int pad = dp(activity, 16);
+        int padV = dp(activity, 8);
+        tvResult.setPadding(pad, padV, pad, padV);
+        tvResult.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        // Use a fixed-width font so symbols align neatly.
+        tvResult.setTypeface(android.graphics.Typeface.MONOSPACE);
+
+        StringBuilder sb = new StringBuilder();
+        for (String line : results) {
+            sb.append(line).append('\n');
+        }
+        tvResult.setText(sb.toString().trim());
+
+        scrollView.addView(tvResult, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        new AlertDialog.Builder(activity)
+                .setTitle("版本适配探测结果")
+                .setView(scrollView)
+                .setPositiveButton("确定", null)
                 .show();
     }
 
