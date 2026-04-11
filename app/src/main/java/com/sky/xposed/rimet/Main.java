@@ -130,9 +130,10 @@ public class Main extends XposedModule {
         XConfig config = versionManager.getSupportConfig();
 
         if (config == null) {
-            log(Log.WARN, TAG, "Unsupported DingTalk version: " + versionManager.getVersionName()
-                    + " (supported: " + versionManager.getSupportVersion()
-                    + ") — skipping DingTalk-specific hooks");
+            log(Log.WARN, TAG, "No config available for DingTalk " + versionManager.getVersionName()
+                    + " (known versions: " + versionManager.getSupportVersion()
+                    + ") — DingTalk is older than the earliest supported version;"
+                    + " DingTalkDeepHookPlugin still active for anti-recall/red-packet/location");
             return;
         }
 
