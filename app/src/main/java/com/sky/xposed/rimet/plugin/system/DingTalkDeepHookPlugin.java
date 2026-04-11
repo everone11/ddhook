@@ -330,8 +330,8 @@ public class DingTalkDeepHookPlugin {
     /** Hooks a {@code getLatitude()}/{@code getLongitude()} method to return the fake coordinate. */
     private static void hookCoordGetter(XposedModule module, Method m,
             String className, boolean isLat) {
-        final String coordFlag = isLat ? Constant.XFlag.LATITUDE : Constant.XFlag.LONGITUDE;
-        final String otherFlag = isLat ? Constant.XFlag.LONGITUDE : Constant.XFlag.LATITUDE;
+        final int coordFlag = isLat ? Constant.XFlag.LATITUDE : Constant.XFlag.LONGITUDE;
+        final int otherFlag = isLat ? Constant.XFlag.LONGITUDE : Constant.XFlag.LATITUDE;
         final String logTag = className + "#" + m.getName();
         module.hook(m).intercept(chain -> {
             SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
@@ -361,8 +361,8 @@ public class DingTalkDeepHookPlugin {
      */
     private static void hookCoordSetter(XposedModule module, Method m,
             String className, boolean isLat) {
-        final String coordFlag = isLat ? Constant.XFlag.LATITUDE : Constant.XFlag.LONGITUDE;
-        final String otherFlag = isLat ? Constant.XFlag.LONGITUDE : Constant.XFlag.LATITUDE;
+        final int coordFlag = isLat ? Constant.XFlag.LATITUDE : Constant.XFlag.LONGITUDE;
+        final int otherFlag = isLat ? Constant.XFlag.LONGITUDE : Constant.XFlag.LATITUDE;
         module.hook(m).intercept(chain -> {
             SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
             if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
