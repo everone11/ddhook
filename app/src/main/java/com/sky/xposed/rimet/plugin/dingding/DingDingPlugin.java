@@ -81,7 +81,63 @@ public class DingDingPlugin extends BasePlugin {
 
     @Override
     public void openSettings(Activity activity) {
-        showLocationDialog(activity);
+        showMainSettingsDialog(activity);
+    }
+
+    /**
+     * Shows the main "钉钉助手" settings dialog.
+     *
+     * <p>Contains simple on/off toggles for:
+     * <ul>
+     *   <li>消息防撤回 — anti-recall</li>
+     *   <li>抢红包 — automatic red-packet grabbing</li>
+     * </ul>
+     * and a button that opens the full virtual-location configuration dialog.</p>
+     */
+    private static void showMainSettingsDialog(Activity activity) {
+        if (activity == null || activity.isFinishing()) return;
+
+        SharedPreferences prefs =
+                activity.getSharedPreferences(Constant.Name.RIMET, Context.MODE_PRIVATE);
+        int pad  = dp(activity, 16);
+        int padV = dp(activity, 8);
+
+        LinearLayout layout = new LinearLayout(activity);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(pad, padV, pad, padV);
+
+        // ── 消息防撤回 toggle ───────────────────────────────────────────────
+        CheckBox cbAntiRecall = new CheckBox(activity);
+        cbAntiRecall.setText("消息防撤回");
+        cbAntiRecall.setChecked(prefs.getBoolean(
+                key(Constant.XFlag.ENABLE_ANTI_RECALL), false));
+        layout.addView(cbAntiRecall, rowParams(padV));
+
+        // ── 抢红包 toggle ───────────────────────────────────────────────────
+        CheckBox cbRedPacket = new CheckBox(activity);
+        cbRedPacket.setText("抢红包");
+        cbRedPacket.setChecked(prefs.getBoolean(
+                key(Constant.XFlag.ENABLE_RED_PACKET), false));
+        layout.addView(cbRedPacket, rowParams(padV));
+
+        // ── 虚拟定位设置 button ─────────────────────────────────────────────
+        Button btnLocation = new Button(activity);
+        btnLocation.setText("虚拟定位设置…");
+        btnLocation.setOnClickListener(v -> showLocationDialog(activity));
+        layout.addView(btnLocation, rowParams(padV));
+
+        new AlertDialog.Builder(activity)
+                .setTitle(Constant.Name.TITLE)
+                .setView(layout)
+                .setPositiveButton("保存", (d, w) ->
+                        prefs.edit()
+                                .putBoolean(key(Constant.XFlag.ENABLE_ANTI_RECALL),
+                                        cbAntiRecall.isChecked())
+                                .putBoolean(key(Constant.XFlag.ENABLE_RED_PACKET),
+                                        cbRedPacket.isChecked())
+                                .apply())
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     /**

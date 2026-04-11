@@ -73,6 +73,12 @@ public interface Constant {
 
         /** Stores the name of the last selected address preset (empty string = none). */
         int SELECTED_PRESET_NAME = 0x000012;
+
+        /** Whether message anti-recall (消息防撤回) is enabled. */
+        int ENABLE_ANTI_RECALL = 0x000013;
+
+        /** Whether automatic red-packet grabbing (抢红包) is enabled. */
+        int ENABLE_RED_PACKET = 0x000014;
     }
 
     interface Flag {

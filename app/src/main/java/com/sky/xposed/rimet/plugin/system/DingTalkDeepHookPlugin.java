@@ -32,14 +32,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import io.github.libxposed.api.XposedModule;
 
 /**
- * Deep hooks for DingTalk's internal AMap location pipeline.
+ * Deep hooks for DingTalk's internal AMap location pipeline, message anti-recall,
+ * and red-packet grabbing.
  *
  * <p>All hooks are wrapped in try/catch and will not crash the target app if a
  * class or method is absent (e.g. due to obfuscation or DingTalk version changes).
  * Load these hooks after the DingTalk {@link ClassLoader} is available, i.e. from
  * {@code Main.onPackageReady}.</p>
  *
- * <p>Classes hooked here:</p>
+ * <p>Classes hooked here (location pipeline):</p>
  * <ul>
  *   <li>{@code com.alibaba.android.dingtalkbase.amap.GMapLocation} — DingTalk's
  *       {@code android.location.Location} subclass; overrides getLatitude/getLongitude.</li>
@@ -49,6 +50,16 @@ import io.github.libxposed.api.XposedModule;
  *       — AOP replacement class that DingTalk uses instead of the system WifiManager
  *       for getScanResults / startScan, bypassing system-level hooks.</li>
  * </ul>
+ *
+ * <p>Anti-recall: hooks the recall-event processor in
+ * {@code com.alibaba.android.rimet.biz.session.convmsg.ConvMsgService} (primary) and
+ * several fall-back class names used across different DingTalk 8.x builds.  When
+ * enabled the recall notification is silently discarded so the original message
+ * remains visible in the conversation.</p>
+ *
+ * <p>Red-packet grabbing: hooks the new-red-packet arrival callback in
+ * {@code com.alibaba.android.rimet.biz.hbmanager.HongBaoManagerImpl} and
+ * attempts to invoke the open/grab action automatically.</p>
  */
 public class DingTalkDeepHookPlugin {
 
@@ -87,8 +98,11 @@ public class DingTalkDeepHookPlugin {
         hookLocationProxy(module, classLoader);
         hookAMapLocationClient(module, classLoader);
         hookAopWifiManager(module, classLoader);
+        hookAntiRecall(module, classLoader);
+        hookRedPacket(module, classLoader);
         module.log(Log.INFO, TAG, "DingTalk deep hooks installed");
     }
+
 
     // -----------------------------------------------------------------------
     // GMapLocation — DingTalk's Location subclass
@@ -460,6 +474,207 @@ public class DingTalkDeepHookPlugin {
 
         } catch (Throwable e) {
             module.log(Log.WARN, TAG, "hookAopWifiManager class not found", e);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Anti-recall (消息防撤回) — prevent server-pushed recall events from
+    // removing messages from the local conversation view.
+    // -----------------------------------------------------------------------
+
+    /**
+     * Hooks the recall-event processor(s) in DingTalk 8.x.
+     *
+     * <p>Multiple candidate class / method names are tried in sequence.  Each
+     * attempt is individually wrapped in try/catch so a failure in one attempt
+     * does not prevent the others from running.  The hooks intercept the method
+     * <em>before</em> it executes and return {@code null} immediately (skipping
+     * the original call) when anti-recall is enabled.</p>
+     */
+    private static void hookAntiRecall(XposedModule module, ClassLoader classLoader) {
+
+        // Candidate 1 — ConvMsgService.onRevokeMsg (DingTalk 8.x primary path)
+        tryHookAntiRecallMethod(module, classLoader,
+                "com.alibaba.android.rimet.biz.session.convmsg.ConvMsgService",
+                "onRevokeMsg");
+
+        // Candidate 2 — alternate method name in the same class
+        tryHookAntiRecallMethod(module, classLoader,
+                "com.alibaba.android.rimet.biz.session.convmsg.ConvMsgService",
+                "revokeMsg");
+
+        // Candidate 3 — IMConversationReceiver (seen in some 7.x / 8.x builds)
+        tryHookAntiRecallMethod(module, classLoader,
+                "com.alibaba.android.rimet.biz.session.receiver.IMConversationReceiver",
+                "onRevokeMsg");
+
+        // Candidate 4 — message revoke processor (modular architecture)
+        tryHookAntiRecallMethod(module, classLoader,
+                "com.laiwang.android.message.lib.processor.MsgRevokeProcessor",
+                "process");
+
+        // Candidate 5 — revoke helper utility
+        tryHookAntiRecallMethod(module, classLoader,
+                "com.alibaba.android.rimet.biz.session.helper.MessageRevokeHelper",
+                "revokeMessage");
+    }
+
+    /**
+     * Attempts to hook every declared method with the given name on the given class.
+     * Skips silently if the class or method cannot be found.
+     */
+    private static void tryHookAntiRecallMethod(XposedModule module, ClassLoader classLoader,
+            String className, String methodName) {
+        try {
+            Class<?> cls = classLoader.loadClass(className);
+            boolean hooked = false;
+            for (Method m : cls.getDeclaredMethods()) {
+                if (!methodName.equals(m.getName())) continue;
+                m.setAccessible(true);
+                module.hook(m).intercept(chain -> {
+                    if (!SystemHookPlugin.getBoolFlag(module, Constant.XFlag.ENABLE_ANTI_RECALL)) {
+                        return chain.proceed();
+                    }
+                    module.log(Log.INFO, TAG,
+                            "AntiRecall: blocked " + chain.getMethod().getName()
+                                    + " in " + className);
+                    // Return null / 0 / false depending on return type to satisfy callers.
+                    Class<?> returnType = chain.getMethod().getReturnType();
+                    if (returnType == boolean.class || returnType == Boolean.class) return false;
+                    if (returnType == int.class    || returnType == Integer.class)  return 0;
+                    if (returnType == long.class   || returnType == Long.class)     return 0L;
+                    return null; // void or Object
+                });
+                hooked = true;
+            }
+            if (hooked) {
+                module.log(Log.INFO, TAG,
+                        "hookAntiRecall installed: " + className + "#" + methodName);
+            }
+        } catch (ClassNotFoundException e) {
+            // Class absent in this DingTalk version — skip silently.
+        } catch (Throwable e) {
+            module.log(Log.WARN, TAG,
+                    "hookAntiRecall failed for " + className + "#" + methodName, e);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Red-packet grabbing (抢红包) — automatically claim red packets when
+    // a new HongBao message arrives in a conversation.
+    // -----------------------------------------------------------------------
+
+    /**
+     * Hooks the red-packet arrival callback(s) in DingTalk 8.x.
+     *
+     * <p>When enabled the hook calls the "open/grab" action on the HongBao
+     * manager immediately after the arrival event fires, simulating the user
+     * tapping the red packet envelope.</p>
+     */
+    private static void hookRedPacket(XposedModule module, ClassLoader classLoader) {
+
+        // Candidate 1 — HongBaoManagerImpl (DingTalk 8.x primary path)
+        tryHookRedPacketReceive(module, classLoader,
+                "com.alibaba.android.rimet.biz.hbmanager.HongBaoManagerImpl",
+                "onReceiveNewHb");
+
+        // Candidate 2 — alternate arrival method name
+        tryHookRedPacketReceive(module, classLoader,
+                "com.alibaba.android.rimet.biz.hbmanager.HongBaoManagerImpl",
+                "onReceiveHongBao");
+
+        // Candidate 3 — HongBaoHelper (utility layer)
+        tryHookRedPacketReceive(module, classLoader,
+                "com.alibaba.android.dingtalkbase.multidexsupport.components.hb.HongBaoHelper",
+                "onNewHongBao");
+
+        // Candidate 4 — HongBaoComponent (component architecture)
+        tryHookRedPacketReceive(module, classLoader,
+                "com.alibaba.android.dingtalkbase.multidexsupport.components.hb.HongBaoComponent",
+                "receiveHongBao");
+
+        // Candidate 5 — push notification handler for red packets
+        tryHookRedPacketReceive(module, classLoader,
+                "com.alibaba.android.rimet.biz.hbmanager.HongBaoPushHandler",
+                "onNewHongBao");
+    }
+
+    /**
+     * Attempts to hook every declared method with the given name and registers an
+     * after-hook that calls the first reachable "open/grab" method on {@code this}
+     * (the manager instance) when red-packet grabbing is enabled.
+     */
+    private static void tryHookRedPacketReceive(XposedModule module, ClassLoader classLoader,
+            String className, String methodName) {
+        try {
+            Class<?> cls = classLoader.loadClass(className);
+            boolean hooked = false;
+            for (Method m : cls.getDeclaredMethods()) {
+                if (!methodName.equals(m.getName())) continue;
+                m.setAccessible(true);
+                module.hook(m).intercept(chain -> {
+                    // Let the original method run first so the HongBao is registered.
+                    Object result = chain.proceed();
+                    if (!SystemHookPlugin.getBoolFlag(module, Constant.XFlag.ENABLE_RED_PACKET)) {
+                        return result;
+                    }
+                    module.log(Log.INFO, TAG,
+                            "RedPacket: auto-grabbing after " + chain.getMethod().getName()
+                                    + " in " + className);
+                    // Attempt to invoke grab/open on the same object instance.
+                    Object thiz = chain.getThisObject();
+                    if (thiz != null) {
+                        invokeGrabMethod(module, thiz, chain.getArgs().toArray());
+                    }
+                    return result;
+                });
+                hooked = true;
+            }
+            if (hooked) {
+                module.log(Log.INFO, TAG,
+                        "hookRedPacket installed: " + className + "#" + methodName);
+            }
+        } catch (ClassNotFoundException e) {
+            // Class absent — skip silently.
+        } catch (Throwable e) {
+            module.log(Log.WARN, TAG,
+                    "hookRedPacket failed for " + className + "#" + methodName, e);
+        }
+    }
+
+    /**
+     * Tries to call a "grab/open" method on the HongBao manager instance.
+     * Candidate method names are tried in order; the first one that succeeds wins.
+     *
+     * @param module the LibXposed module (for logging).
+     * @param thiz   the HongBao manager instance returned by {@code chain.getThisObject()}.
+     * @param args   the original method arguments (may carry HongBao ID / conversation info).
+     */
+    private static void invokeGrabMethod(XposedModule module, Object thiz, Object[] args) {
+        String[] grabNames = {"openHongBao", "grabHongBao", "receiveHb", "openHb", "grabHb"};
+        for (String name : grabNames) {
+            for (Method m : thiz.getClass().getDeclaredMethods()) {
+                if (!name.equals(m.getName())) continue;
+                try {
+                    m.setAccessible(true);
+                    // Try to call with the same args first; if that fails try no-args.
+                    try {
+                        if (m.getParameterCount() == args.length) {
+                            m.invoke(thiz, args);
+                        } else if (m.getParameterCount() == 0) {
+                            m.invoke(thiz);
+                        } else {
+                            continue; // Arity mismatch — try next candidate.
+                        }
+                    } catch (IllegalArgumentException e) {
+                        m.invoke(thiz); // Fallback: no-args call.
+                    }
+                    module.log(Log.INFO, TAG, "RedPacket: invoked " + name + " successfully");
+                    return;
+                } catch (Throwable e) {
+                    module.log(Log.WARN, TAG, "RedPacket: " + name + " invoke failed", e);
+                }
+            }
         }
     }
 }
