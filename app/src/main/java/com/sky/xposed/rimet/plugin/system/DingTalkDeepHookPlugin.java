@@ -26,7 +26,9 @@ import android.widget.Toast;
 import com.sky.xposed.rimet.Constant;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -786,6 +788,114 @@ public class DingTalkDeepHookPlugin {
                     module.log(Log.WARN, TAG, "RedPacket: " + name + " invoke failed", e);
                 }
             }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Adaptation probe — used by the settings UI to display hook status.
+    // -----------------------------------------------------------------------
+
+    /**
+     * Probes which anti-recall and red-packet hooks will be active for the
+     * currently installed DingTalk version and returns a human-readable
+     * summary suitable for display in the settings UI.
+     *
+     * <p>This method does <em>not</em> install any hooks — it is purely
+     * informational and safe to call from a settings dialog.</p>
+     *
+     * @param classLoader the DingTalk process class loader.
+     * @return list of result lines (one per candidate class), each prefixed
+     *         with "✓" (class found, at least one matching method found),
+     *         "△" (class found but no matching method found), or
+     *         "✗" (class not present in this DingTalk version).
+     */
+    public static List<String> probeAdaptation(ClassLoader classLoader) {
+        List<String> results = new ArrayList<>();
+
+        results.add("── 消息防撤回 (Anti-Recall) ──");
+        for (String className : RECALL_CLASS_CANDIDATES) {
+            results.add(probeClass(classLoader, className, RECALL_METHOD_PATTERNS,
+                    "recall/revoke"));
+        }
+
+        results.add("");
+        results.add("── 抢红包 (Red-Packet) ──");
+        for (String className : HONGBAO_CLASS_CANDIDATES) {
+            List<String> matched = findMatchingMethodNames(classLoader, className,
+                    DingTalkDeepHookPlugin::isHongBaoArrivalMethod);
+            String simpleClass = simpleClassName(className);
+            if (matched == null) {
+                results.add("✗ " + simpleClass);
+            } else if (matched.isEmpty()) {
+                results.add("△ " + simpleClass + " (无匹配方法)");
+            } else {
+                results.add("✓ " + simpleClass + ": " + String.join(", ", matched));
+            }
+        }
+
+        results.add("");
+        results.add("── 抢红包 open/grab 方法 ──");
+        for (String className : HONGBAO_CLASS_CANDIDATES) {
+            List<String> grabMatches = new ArrayList<>();
+            try {
+                Class<?> cls = classLoader.loadClass(className);
+                for (Method m : cls.getDeclaredMethods()) {
+                    for (String g : GRAB_METHOD_NAMES) {
+                        if (g.equals(m.getName())) {
+                            grabMatches.add(m.getName());
+                            break;
+                        }
+                    }
+                }
+                if (!grabMatches.isEmpty()) {
+                    results.add("✓ " + simpleClassName(className)
+                            + ": " + String.join(", ", grabMatches));
+                }
+            } catch (ClassNotFoundException ignored) {
+                // class absent — skip
+            }
+        }
+
+        return results;
+    }
+
+    /** Helper: probe a single class for recall/revoke pattern matches. */
+    private static String probeClass(ClassLoader classLoader, String className,
+            String[] patterns, String label) {
+        String simpleClass = simpleClassName(className);
+        List<String> matched = findMatchingMethodNames(classLoader, className,
+                name -> matchesAny(name, patterns));
+        if (matched == null) return "✗ " + simpleClass;
+        if (matched.isEmpty()) return "△ " + simpleClass + " (无匹配方法)";
+        return "✓ " + simpleClass + ": " + String.join(", ", matched);
+    }
+
+    /**
+     * Returns the simple (unqualified) class name from a fully-qualified class name.
+     * If the name contains no '.', the full name is returned unchanged.
+     */
+    private static String simpleClassName(String className) {
+        int dot = className.lastIndexOf('.');
+        return dot >= 0 ? className.substring(dot + 1) : className;
+    }
+
+    /**
+     * Returns the names of all declared methods in {@code className} that pass
+     * the given predicate, or {@code null} if the class is not found.
+     */
+    private static List<String> findMatchingMethodNames(ClassLoader classLoader,
+            String className, java.util.function.Predicate<String> predicate) {
+        try {
+            Class<?> cls = classLoader.loadClass(className);
+            List<String> names = new ArrayList<>();
+            for (Method m : cls.getDeclaredMethods()) {
+                if (predicate.test(m.getName())) {
+                    names.add(m.getName());
+                }
+            }
+            return names;
+        } catch (ClassNotFoundException e) {
+            return null;
         }
     }
 }
