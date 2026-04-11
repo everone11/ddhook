@@ -652,22 +652,28 @@ public class DingTalkDeepHookPlugin {
      */
     private static void invokeGrabMethod(XposedModule module, Object thiz, Object[] args) {
         String[] grabNames = {"openHongBao", "grabHongBao", "receiveHb", "openHb", "grabHb"};
+        // Cache declared methods once to avoid repeated O(n) reflection lookups.
+        Method[] methods = thiz.getClass().getDeclaredMethods();
         for (String name : grabNames) {
-            for (Method m : thiz.getClass().getDeclaredMethods()) {
+            for (Method m : methods) {
                 if (!name.equals(m.getName())) continue;
                 try {
                     m.setAccessible(true);
-                    // Try to call with the same args first; if that fails try no-args.
-                    try {
-                        if (m.getParameterCount() == args.length) {
+                    // Prefer a no-args call for simplicity; fall back to same-arity call
+                    // using the original args if no no-args overload is present.
+                    if (m.getParameterCount() == 0) {
+                        m.invoke(thiz);
+                    } else if (m.getParameterCount() == args.length) {
+                        try {
                             m.invoke(thiz, args);
-                        } else if (m.getParameterCount() == 0) {
-                            m.invoke(thiz);
-                        } else {
-                            continue; // Arity mismatch — try next candidate.
+                        } catch (IllegalArgumentException e) {
+                            // Type mismatch — args have incompatible types for this overload.
+                            module.log(Log.DEBUG, TAG,
+                                    "RedPacket: " + name + " type mismatch, skipping", e);
+                            continue;
                         }
-                    } catch (IllegalArgumentException e) {
-                        m.invoke(thiz); // Fallback: no-args call.
+                    } else {
+                        continue; // Arity mismatch — try next candidate.
                     }
                     module.log(Log.INFO, TAG, "RedPacket: invoked " + name + " successfully");
                     return;
