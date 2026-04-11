@@ -193,7 +193,7 @@ public class DingTalkDeepHookPlugin {
                     if (!"initSecurityGuard".equals(m.getName())) continue;
                     m.setAccessible(true);
                     module.hook(m).intercept(chain -> {
-                        Class<?> returnType = chain.getMethod().getReturnType();
+                        Class<?> returnType = m.getReturnType();
                         if (returnType == boolean.class || returnType == Boolean.class) return false;
                         if (returnType == int.class    || returnType == Integer.class)  return 0;
                         if (returnType == long.class   || returnType == Long.class)     return 0L;
@@ -617,6 +617,7 @@ public class DingTalkDeepHookPlugin {
                 if (!matchesAny(m.getName(), RECALL_METHOD_PATTERNS)) continue;
                 m.setAccessible(true);
                 final String methodName = m.getName();
+                final Class<?> hookReturnType = m.getReturnType();
                 module.hook(m).intercept(chain -> {
                     if (!SystemHookPlugin.getBoolFlag(module, Constant.XFlag.ENABLE_ANTI_RECALL)) {
                         return chain.proceed();
@@ -624,7 +625,7 @@ public class DingTalkDeepHookPlugin {
                     module.log(Log.INFO, TAG,
                             "AntiRecall: blocked " + methodName + " in " + className);
                     // Return null / 0 / false depending on return type to satisfy callers.
-                    Class<?> returnType = chain.getMethod().getReturnType();
+                    Class<?> returnType = hookReturnType;
                     if (returnType == boolean.class || returnType == Boolean.class) return false;
                     if (returnType == int.class    || returnType == Integer.class)  return 0;
                     if (returnType == long.class   || returnType == Long.class)     return 0L;
