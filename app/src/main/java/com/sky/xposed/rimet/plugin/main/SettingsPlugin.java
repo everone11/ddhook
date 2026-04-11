@@ -68,15 +68,26 @@ public class SettingsPlugin extends BasePlugin {
     @Override
     public void onHandleLoadPackage() {
 
+        // Legacy "NewSettingActivity" (exists in DingTalk < 8.3.0; absent in 8.3.0+).
+        // findMethod() returns a no-op HookHelper when the class is not found.
         findMethod(
                 M.classz.class_android_user_settings_activity_NewSettingActivity,
                 M.method.method_android_user_settings_activity_NewSettingActivity_onCreate,
                 Bundle.class)
                 .after(chain -> onHandleSettings((Activity) chain.getThisObject()));
 
+        // "UserSettingsActivity" — confirmed present in 8.3.0; uses setting_msg_notice.
         findMethod(
                 M.classz.class_android_user_settings_activity_UserSettingsActivity,
                 M.method.method_android_user_settings_activity_UserSettingsActivity_onCreate,
+                Bundle.class)
+                .after(chain -> onHandleSettings((Activity) chain.getThisObject()));
+
+        // "OneSettingActivity" — the new unified main settings entry-point in DingTalk 8.3.0+,
+        // replacing "NewSettingActivity".  Verified present via APK decompilation artifact.
+        findMethod(
+                M.classz.class_android_user_settings_activity_OneSettingActivity,
+                M.method.method_android_user_settings_activity_OneSettingActivity_onCreate,
                 Bundle.class)
                 .after(chain -> onHandleSettings((Activity) chain.getThisObject()));
     }

@@ -87,13 +87,33 @@ jobs:
             sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
           echo "" >> $OUT
 
-          echo "### UserSettingsActivity candidates" >> $OUT
-          grep -r "class UserSettingsActivity\|class.*UserSettings" /tmp/jadx-out --include="*.java" -l | \
+          echo "### UserSettingsActivity / OneSettingActivity candidates" >> $OUT
+          grep -r "class UserSettingsActivity\|class.*UserSettings\|class OneSettingActivity" /tmp/jadx-out --include="*.java" -l | \
             sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
           echo "" >> $OUT
 
           echo "### setting_msg_notice resource references" >> $OUT
           grep -r "setting_msg_notice" /tmp/jadx-out --include="*.java" | head -20 >> $OUT || true
+          echo "" >> $OUT
+
+          echo "### Anti-recall: message revoke / recall classes" >> $OUT
+          grep -r "class.*[Rr]evoke\|class.*[Rr]ecall\|class ConvMsgService\|class.*ConvMsg" /tmp/jadx-out --include="*.java" -l | \
+            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
+          echo "" >> $OUT
+
+          echo "### Anti-recall: onRevokeMsg / revokeMsg methods" >> $OUT
+          grep -rn "void onRevokeMsg\|void revokeMsg\|void.*[Rr]evokeMessage\|void process.*[Rr]evoke" /tmp/jadx-out --include="*.java" | \
+            sed 's|.*/jadx-out/sources/||' | head -20 >> $OUT || true
+          echo "" >> $OUT
+
+          echo "### Red-packet: HongBao / HB manager classes" >> $OUT
+          grep -r "class.*HongBao\|class.*HongBaoManager\|class.*HbManager\|class.*RedPacket" /tmp/jadx-out --include="*.java" -l | \
+            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
+          echo "" >> $OUT
+
+          echo "### Red-packet: onReceiveNewHb / onReceiveHongBao / openHongBao methods" >> $OUT
+          grep -rn "onReceiveNewHb\|onReceiveHongBao\|openHongBao\|grabHongBao\|receiveHb\|openHb\|grabHb" /tmp/jadx-out --include="*.java" | \
+            grep -v "//\s*" | sed 's|.*/jadx-out/sources/||' | head -30 >> $OUT || true
           echo "" >> $OUT
 
           echo "### alibaba package top-level structure" >> $OUT

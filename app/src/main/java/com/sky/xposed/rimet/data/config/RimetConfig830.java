@@ -21,11 +21,19 @@ import com.sky.xposed.rimet.data.M;
 /**
  * Version-specific configuration for DingTalk 8.3.0.
  *
- * <p>Class names that differ from older versions are enumerated here.  If a
- * class or method has been renamed / obfuscated in a later build the hook in
- * {@link com.sky.xposed.rimet.plugin.system.DingTalkDeepHookPlugin} will catch
- * the resulting {@link ClassNotFoundException} / {@link NoSuchMethodException}
- * and skip that hook gracefully.</p>
+ * <p>Class names were verified against the actual jadx decompilation of DingTalk 8.3.0
+ * (see the "Analyze DingTalk APK" GitHub Actions workflow / class-names-8.3.0 artifact).</p>
+ *
+ * <p>Notable differences from older configs:</p>
+ * <ul>
+ *   <li>{@code NewSettingActivity} does <em>not</em> exist in 8.3.0.  The main settings
+ *       entry-point is now {@code OneSettingActivity}.  The {@code NewSettingActivity} key
+ *       is intentionally omitted so {@code SettingsPlugin} does not try to look it up;
+ *       the {@code OneSettingActivity} key is provided instead.</li>
+ *   <li>The {@code LightAppRuntimeReverseInterface} from the
+ *       {@code com.alibaba.dingtalk.runtimebase} package is also present and contains
+ *       {@code initSecurityGuard} — hooked via {@code DingTalkDeepHookPlugin}.</li>
+ * </ul>
  */
 public class RimetConfig830 extends RimetConfig {
 
@@ -39,8 +47,13 @@ public class RimetConfig830 extends RimetConfig {
                 "com.alibaba.android.dingtalkbase.multidexsupport.DDApplication");
         add(M.classz.class_lightapp_runtime_LightAppRuntimeReverseInterfaceImpl,
                 "com.alibaba.lightapp.runtime.LightAppRuntimeReverseInterfaceImpl");
-        add(M.classz.class_android_user_settings_activity_NewSettingActivity,
-                "com.alibaba.android.user.settings.activity.NewSettingActivity");
+
+        // In 8.3.0, "NewSettingActivity" no longer exists (verified by APK decompilation).
+        // "OneSettingActivity" is the new unified settings entry-point.
+        // The NewSettingActivity key is intentionally NOT mapped so SettingsPlugin skips it;
+        // UserSettingsActivity (confirmed present with setting_msg_notice) handles the hook.
+        add(M.classz.class_android_user_settings_activity_OneSettingActivity,
+                "com.alibaba.android.user.settings.activity.OneSettingActivity");
         add(M.classz.class_android_user_settings_activity_UserSettingsActivity,
                 "com.alibaba.android.user.settings.activity.UserSettingsActivity");
 
@@ -55,7 +68,7 @@ public class RimetConfig830 extends RimetConfig {
         /** Method */
         add(M.method.method_lightapp_runtime_LightAppRuntimeReverseInterfaceImpl_initSecurityGuard,
                 "initSecurityGuard");
-        add(M.method.method_android_user_settings_activity_NewSettingActivity_onCreate,
+        add(M.method.method_android_user_settings_activity_OneSettingActivity_onCreate,
                 "onCreate");
         add(M.method.method_android_user_settings_activity_UserSettingsActivity_onCreate,
                 "onCreate");
