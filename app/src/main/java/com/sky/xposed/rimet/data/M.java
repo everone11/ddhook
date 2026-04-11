@@ -36,6 +36,12 @@ public final class M {
         public static final int class_android_user_settings_activity_NewSettingActivity = 0x1f00000C;
 
         public static final int class_android_user_settings_activity_UserSettingsActivity = 0x1f00000D;
+
+        /** DingTalk 8.3.0 — session conversation message service (handles server push events). */
+        public static final int class_rimet_biz_session_convmsg_ConvMsgService = 0x1f000010;
+
+        /** DingTalk 8.3.0 — red-packet (HongBao) manager implementation. */
+        public static final int class_rimet_biz_hbmanager_HongBaoManagerImpl = 0x1f000011;
     }
 
     public static final class method {
@@ -45,6 +51,12 @@ public final class M {
         public static final int method_android_user_settings_activity_NewSettingActivity_onCreate = 0x2f00000C;
 
         public static final int method_android_user_settings_activity_UserSettingsActivity_onCreate = 0x2f00000D;
+
+        /** DingTalk 8.3.0 — method in ConvMsgService that processes a server-pushed recall event. */
+        public static final int method_rimet_biz_session_convmsg_ConvMsgService_onRevokeMsg = 0x2f000010;
+
+        /** DingTalk 8.3.0 — method in HongBaoManagerImpl called when a new red packet arrives. */
+        public static final int method_rimet_biz_hbmanager_HongBaoManagerImpl_onReceiveNewHb = 0x2f000011;
     }
 
     public static final class res {

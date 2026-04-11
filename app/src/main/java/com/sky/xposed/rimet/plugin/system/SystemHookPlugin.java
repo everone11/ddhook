@@ -126,7 +126,8 @@ public class SystemHookPlugin {
         if (ctx != null) {
             SharedPreferences local = ctx.getSharedPreferences(
                     Constant.Name.RIMET, Context.MODE_PRIVATE);
-            if (local.contains(Integer.toString(Constant.XFlag.ENABLE_LOCATION))) {
+            // Use local prefs if the user has saved any settings via the in-DingTalk dialog.
+            if (!local.getAll().isEmpty()) {
                 return local;
             }
         }
@@ -146,6 +147,15 @@ public class SystemHookPlugin {
 
     static String getString(SharedPreferences prefs, int key) {
         return prefs != null ? prefs.getString(Integer.toString(key), "") : "";
+    }
+
+    /**
+     * Reads a boolean feature flag from the resolved SharedPreferences.
+     * Convenience wrapper used by anti-recall and red-packet hooks.
+     */
+    static boolean getBoolFlag(XposedModule module, int flag) {
+        SharedPreferences prefs = getPrefs(module);
+        return prefs != null && prefs.getBoolean(Integer.toString(flag), false);
     }
 
     /** Rate-limited info log using CAS to prevent duplicate entries within the window. */
