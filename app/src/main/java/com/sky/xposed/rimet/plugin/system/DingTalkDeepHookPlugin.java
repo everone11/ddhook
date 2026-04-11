@@ -330,22 +330,22 @@ public class DingTalkDeepHookPlugin {
     /** Hooks a {@code getLatitude()}/{@code getLongitude()} method to return the fake coordinate. */
     private static void hookCoordGetter(XposedModule module, Method m,
             String className, boolean isLat) {
-        final String coordFlag = isLat ? Constant.XFlag.LATITUDE  : Constant.XFlag.LONGITUDE;
+        final String coordFlag = isLat ? Constant.XFlag.LATITUDE : Constant.XFlag.LONGITUDE;
         final String otherFlag = isLat ? Constant.XFlag.LONGITUDE : Constant.XFlag.LATITUDE;
-        final String logTag    = className + "#" + m.getName();
+        final String logTag = className + "#" + m.getName();
         module.hook(m).intercept(chain -> {
             SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
             if (!SystemHookPlugin.isEnabled(prefs)) return chain.proceed();
             String val = SystemHookPlugin.getString(prefs, coordFlag);
             if (val.isEmpty()) return chain.proceed();
             try {
-                double base  = Double.parseDouble(val);
+                double base = Double.parseDouble(val);
                 String other = SystemHookPlugin.getString(prefs, otherFlag);
-                String off   = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
+                String off = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
                 SystemHookPlugin.logSpoofed(module, logTag);
                 if (other.isEmpty() || off.isEmpty()) return base;
                 double[] coords = SystemHookPlugin.getEffectiveCoords(
-                        isLat ? base                      : Double.parseDouble(other),
+                        isLat ? base : Double.parseDouble(other),
                         isLat ? Double.parseDouble(other) : base,
                         Double.parseDouble(off));
                 return isLat ? coords[0] : coords[1];
@@ -361,7 +361,7 @@ public class DingTalkDeepHookPlugin {
      */
     private static void hookCoordSetter(XposedModule module, Method m,
             String className, boolean isLat) {
-        final String coordFlag = isLat ? Constant.XFlag.LATITUDE  : Constant.XFlag.LONGITUDE;
+        final String coordFlag = isLat ? Constant.XFlag.LATITUDE : Constant.XFlag.LONGITUDE;
         final String otherFlag = isLat ? Constant.XFlag.LONGITUDE : Constant.XFlag.LATITUDE;
         module.hook(m).intercept(chain -> {
             SharedPreferences prefs = SystemHookPlugin.getPrefs(module);
@@ -369,12 +369,12 @@ public class DingTalkDeepHookPlugin {
             String val = SystemHookPlugin.getString(prefs, coordFlag);
             if (val.isEmpty()) return chain.proceed();
             try {
-                double base  = Double.parseDouble(val);
+                double base = Double.parseDouble(val);
                 String other = SystemHookPlugin.getString(prefs, otherFlag);
-                String off   = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
+                String off = SystemHookPlugin.getString(prefs, Constant.XFlag.LOCATION_OFFSET);
                 if (other.isEmpty() || off.isEmpty()) return chain.proceed(new Object[]{base});
                 double[] coords = SystemHookPlugin.getEffectiveCoords(
-                        isLat ? base                      : Double.parseDouble(other),
+                        isLat ? base : Double.parseDouble(other),
                         isLat ? Double.parseDouble(other) : base,
                         Double.parseDouble(off));
                 return chain.proceed(new Object[]{isLat ? coords[0] : coords[1]});

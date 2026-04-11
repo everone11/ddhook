@@ -128,7 +128,7 @@ jobs:
 
           echo "### Virtual location: onLocationChanged implementations" >> $OUT
           grep -rn "void onLocationChanged" /tmp/jadx-out --include="*.java" | \
-            grep -v "^\s*//" | \
+            grep -vE "^\s*//" | \
             grep -v "com/amap\|com/alipay" | \
             sed 's|.*/jadx-out/sources/||' | head -20 >> $OUT || true
           echo "" >> $OUT
