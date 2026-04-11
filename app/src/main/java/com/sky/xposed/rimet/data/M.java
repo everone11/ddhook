@@ -37,6 +37,12 @@ public final class M {
 
         public static final int class_android_user_settings_activity_UserSettingsActivity = 0x1f00000D;
 
+        /**
+         * DingTalk 8.3.0+ — "OneSettingActivity" is the new unified main settings entry point,
+         * replacing the older "NewSettingActivity" that no longer exists in 8.3.0.
+         */
+        public static final int class_android_user_settings_activity_OneSettingActivity = 0x1f00000E;
+
         /** DingTalk 8.3.0 — session conversation message service (handles server push events). */
         public static final int class_rimet_biz_session_convmsg_ConvMsgService = 0x1f000010;
 
@@ -51,6 +57,9 @@ public final class M {
         public static final int method_android_user_settings_activity_NewSettingActivity_onCreate = 0x2f00000C;
 
         public static final int method_android_user_settings_activity_UserSettingsActivity_onCreate = 0x2f00000D;
+
+        /** DingTalk 8.3.0+ — {@code onCreate} method of {@code OneSettingActivity}. */
+        public static final int method_android_user_settings_activity_OneSettingActivity_onCreate = 0x2f00000E;
 
         /** DingTalk 8.3.0 — method in ConvMsgService that processes a server-pushed recall event. */
         public static final int method_rimet_biz_session_convmsg_ConvMsgService_onRevokeMsg = 0x2f000010;

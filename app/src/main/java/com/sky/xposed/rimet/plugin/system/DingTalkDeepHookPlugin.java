@@ -98,9 +98,43 @@ public class DingTalkDeepHookPlugin {
         hookLocationProxy(module, classLoader);
         hookAMapLocationClient(module, classLoader);
         hookAopWifiManager(module, classLoader);
+        hookInitSecurityGuardRuntimeBase(module, classLoader);
         hookAntiRecall(module, classLoader);
         hookRedPacket(module, classLoader);
         module.log(Log.INFO, TAG, "DingTalk deep hooks installed");
+    }
+
+    // -----------------------------------------------------------------------
+    // LightAppRuntimeReverseInterface (com.alibaba.dingtalk.runtimebase) —
+    // second implementation of initSecurityGuard found in DingTalk 8.3.0.
+    // Verified via APK decompilation artifact (class_names_8.3.0.txt).
+    // -----------------------------------------------------------------------
+
+    private static void hookInitSecurityGuardRuntimeBase(XposedModule module, ClassLoader classLoader) {
+        // Two candidate classes confirmed to contain initSecurityGuard in DingTalk 8.3.0:
+        //   1. com.alibaba.lightapp.runtime.LightAppRuntimeReverseInterfaceImpl  (hooked via DingDingPlugin config)
+        //   2. com.alibaba.dingtalk.runtimebase.LightAppRuntimeReverseInterface  (hooked here, class-loader path)
+        String[] candidates = {
+                "com.alibaba.dingtalk.runtimebase.LightAppRuntimeReverseInterface",
+                "com.alibaba.dingtalk.runtimebase.LightAppRuntimeReverseInterface$$Impl",
+        };
+        for (String className : candidates) {
+            try {
+                Class<?> cls = classLoader.loadClass(className);
+                for (Method m : cls.getDeclaredMethods()) {
+                    if (!"initSecurityGuard".equals(m.getName())) continue;
+                    m.setAccessible(true);
+                    module.hook(m).intercept(chain -> null);
+                    module.log(Log.INFO, TAG,
+                            "hookInitSecurityGuard installed: " + className);
+                }
+            } catch (ClassNotFoundException e) {
+                // Class absent in this DingTalk version — skip silently.
+            } catch (Throwable e) {
+                module.log(Log.WARN, TAG,
+                        "hookInitSecurityGuardRuntimeBase failed for " + className, e);
+            }
+        }
     }
 
 
