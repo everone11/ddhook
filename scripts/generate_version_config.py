@@ -186,6 +186,30 @@ def parse_report(report_path: str) -> dict:
     )
     info["all_hongbao_classes"] = all_hongbao
 
+    # ── Virtual-location candidates ──────────────────────────────────────────
+    # Classes from the three new virtual-location sections in the report.
+    loc_direct = [c for c in parse_section(
+        content, "Virtual location: GMapLocation and LocationProxy candidates")
+        if is_real_class(c)]
+
+    # Extract class names from onLocationChanged method-reference lines
+    loc_from_on_changed = [
+        extract_class_from_method_line(line)
+        for line in parse_section(
+            content, "Virtual location: onLocationChanged implementations")
+    ]
+    loc_from_on_changed = [c for c in loc_from_on_changed if is_real_class(c)]
+
+    # Extract class names from getLatitude/getLongitude override file list
+    loc_from_override = [c for c in parse_section(
+        content, "Virtual location: getLatitude / getLongitude overrides (DingTalk-specific)")
+        if is_real_class(c)]
+
+    all_location = list(dict.fromkeys(
+        loc_direct + loc_from_on_changed + loc_from_override))
+
+    info["all_location_classes"] = all_location
+
     return info
 
 
@@ -403,9 +427,9 @@ def _insert_before_array_close(content: str, array_name: str, new_classes: list)
     return content[:close_idx] + insertion + "    " + content[close_idx:]
 
 
-def update_deep_hook_plugin(all_recall: list, all_hongbao: list) -> bool:
+def update_deep_hook_plugin(all_recall: list, all_hongbao: list, all_location: list) -> bool:
     """
-    Append newly discovered recall / hongbao candidate class names to the
+    Append newly discovered recall / hongbao / location candidate class names to the
     respective String[] arrays. Returns True if the file was modified.
     """
     with open(DEEP_HOOK_PATH, encoding="utf-8") as fh:
@@ -430,6 +454,15 @@ def update_deep_hook_plugin(all_recall: list, all_hongbao: list) -> bool:
         changed = True
         for c in new_hongbao:
             print(f"[DeepHookPlugin] added hongbao candidate: {c}")
+
+    # ── LOCATION_CLASS_CANDIDATES ─────────────────────────────────────────────
+    new_location = [c for c in all_location
+                    if is_real_class(c) and f'"{c}"' not in content]
+    if new_location:
+        content = _insert_before_array_close(content, "LOCATION_CLASS_CANDIDATES", new_location)
+        changed = True
+        for c in new_location:
+            print(f"[DeepHookPlugin] added location candidate: {c}")
 
     if changed:
         with open(DEEP_HOOK_PATH, "w", encoding="utf-8") as fh:
@@ -467,6 +500,7 @@ def main():
     print(f"[report] all_recall_classes   : {info['all_recall_classes']}")
     print(f"[report] hongbao_class        : {info['hongbao_class']}")
     print(f"[report] all_hongbao_classes  : {info['all_hongbao_classes']}")
+    print(f"[report] all_location_classes : {info['all_location_classes']}")
 
     # ── Generate RimetConfig<normalized>.java ─────────────────────────────────
     config_path = os.path.join(CONFIG_DIR, f"RimetConfig{normalized}.java")
@@ -479,7 +513,8 @@ def main():
     update_version_manager(version_name, normalized)
 
     # ── Update DingTalkDeepHookPlugin.java with new candidates ────────────────
-    update_deep_hook_plugin(info["all_recall_classes"], info["all_hongbao_classes"])
+    update_deep_hook_plugin(info["all_recall_classes"], info["all_hongbao_classes"],
+                            info["all_location_classes"])
 
     print("=== Done ===")
 

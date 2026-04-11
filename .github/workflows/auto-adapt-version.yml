@@ -109,8 +109,17 @@ after the **Analyze DingTalk APK** workflow completed for version \`${VERSION}\`
 ### Changes
 - \`RimetConfig${NORMALIZED}.java\` — new version-specific class/method mappings
 - \`VersionManager.java\` — registers \`${VERSION}\` → \`RimetConfig${NORMALIZED}\`
-- \`DingTalkDeepHookPlugin.java\` — any new recall / red-packet class candidates
-  discovered during APK decompilation are appended to the candidate arrays
+- \`DingTalkDeepHookPlugin.java\` — newly discovered candidate classes appended to:
+  - \`LOCATION_CLASS_CANDIDATES\` (虚拟定位 / virtual location)
+  - \`RECALL_CLASS_CANDIDATES\` (消息防撤回 / anti-recall)
+  - \`HONGBAO_CLASS_CANDIDATES\` (抢红包 / red-packet)
+
+### Features adapted
+| Feature | Status |
+|---|---|
+| 虚拟定位 (Virtual location) | ✓ GMapLocation / LocationProxy candidates updated |
+| 消息防撤回 (Anti-recall) | ✓ recall/revoke class candidates updated |
+| 抢红包 (Red-packet) | ✓ HongBao manager candidates updated |
 
 ### Build
 The **Build Android APK** workflow will run automatically on this PR.

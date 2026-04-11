@@ -119,6 +119,27 @@ jobs:
           echo "### alibaba package top-level structure" >> $OUT
           find /tmp/jadx-out -type d -name "alibaba" | while read dir; do ls "$dir"; done | sort -u | head -30 >> $OUT || true
 
+          echo "" >> $OUT
+          echo "### Virtual location: GMapLocation and LocationProxy candidates" >> $OUT
+          grep -r "class GMapLocation\|class LocationProxy\|class.*LocationProxy" /tmp/jadx-out --include="*.java" -l | \
+            grep -v "com/amap\|com/alipay" | \
+            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
+          echo "" >> $OUT
+
+          echo "### Virtual location: onLocationChanged implementations" >> $OUT
+          grep -rn "void onLocationChanged" /tmp/jadx-out --include="*.java" | \
+            grep -v "^\s*//" | \
+            grep -v "com/amap\|com/alipay" | \
+            sed 's|.*/jadx-out/sources/||' | head -20 >> $OUT || true
+          echo "" >> $OUT
+
+          echo "### Virtual location: getLatitude / getLongitude overrides (DingTalk-specific)" >> $OUT
+          grep -rn "@Override" /tmp/jadx-out --include="*.java" -l | \
+            xargs grep -l "getLatitude\|getLongitude" 2>/dev/null | \
+            grep -v "com/amap\|com/alipay\|android/location" | \
+            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' | head -20 >> $OUT || true
+          echo "" >> $OUT
+
           cat $OUT
 
       - name: Upload class names report
