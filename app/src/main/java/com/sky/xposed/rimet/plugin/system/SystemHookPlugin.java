@@ -126,9 +126,10 @@ public class SystemHookPlugin {
         if (ctx != null) {
             SharedPreferences local = ctx.getSharedPreferences(
                     Constant.Name.RIMET, Context.MODE_PRIVATE);
-            // Use local prefs if the user has saved any of our known feature flags
-            // via the in-DingTalk dialog.  Checking individual keys avoids the
-            // overhead of loading the entire preferences map with getAll().
+            // Use local prefs if the user has saved any of the core feature flags
+            // (location, anti-recall, red-packet) via the in-DingTalk dialog.
+            // Checking individual keys avoids the overhead of loading the entire
+            // preferences map with getAll().
             if (local.contains(Integer.toString(Constant.XFlag.ENABLE_LOCATION))
                     || local.contains(Integer.toString(Constant.XFlag.ENABLE_ANTI_RECALL))
                     || local.contains(Integer.toString(Constant.XFlag.ENABLE_RED_PACKET))) {
