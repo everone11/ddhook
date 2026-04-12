@@ -554,7 +554,16 @@ def update_deep_hook_plugin(all_recall: list, all_hongbao: list, all_location: l
             print(f"[DeepHookPlugin] added recall candidate: {c}")
 
     # ── HONGBAO_CLASS_CANDIDATES ──────────────────────────────────────────────
-    new_hongbao = [c for c in all_hongbao
+    # When the APK decompiler emits "com.aliaba" (a known decompiler artefact for
+    # DingTalk's red-packet module), also add the canonical "com.alibaba" spelling.
+    expanded_hongbao = []
+    for c in all_hongbao:
+        expanded_hongbao.append(c)
+        if c.startswith("com.aliaba."):
+            canonical = "com.alibaba." + c[len("com.aliaba."):]
+            if canonical not in expanded_hongbao:
+                expanded_hongbao.append(canonical)
+    new_hongbao = [c for c in expanded_hongbao
                    if is_real_class(c) and f'"{c}"' not in content]
     if new_hongbao:
         content = _insert_before_array_close(content, "HONGBAO_CLASS_CANDIDATES", new_hongbao)

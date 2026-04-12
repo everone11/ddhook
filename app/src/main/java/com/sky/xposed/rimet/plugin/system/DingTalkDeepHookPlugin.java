@@ -132,7 +132,10 @@ public class DingTalkDeepHookPlugin {
             "com.alibaba.android.rimet.biz.hbmanager.RedPacketManagerImpl",
             "com.alibaba.android.rimet.biz.hbmanager.HbManagerImpl",
             "com.laiwang.android.hongbao.HongBaoProcessor",
-            "com.aliaba.android.dingtalk.redpackets.base.RedPacketInterface", // Auto-added from APK analysis
+            // 7.5.0: decompiled APK shows package as "com.aliaba" (possible obfuscation artifact);
+            // keeping both spellings so the runtime scanner covers either case.
+            "com.alibaba.android.dingtalk.redpackets.base.RedPacketInterface", // Auto-added from APK analysis
+            "com.aliaba.android.dingtalk.redpackets.base.RedPacketInterface",  // Auto-added from APK analysis (verbatim APK name)
     };
 
     // -----------------------------------------------------------------------
