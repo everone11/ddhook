@@ -989,7 +989,10 @@ public class DingTalkDeepHookPlugin {
                 }
             }
         } catch (Throwable e) {
-            // Enumeration unsupported or internal structure changed — return what we have.
+            // Enumeration failed (internal Android structure changed or restricted by
+            // the runtime).  Log at WARN level so developers can diagnose the failure
+            // when running the module on future Android versions.
+            android.util.Log.w(TAG, "enumerateDexClassNames failed — DEX scan unavailable", e);
         }
         return new ArrayList<>(seen);
     }
@@ -1050,6 +1053,7 @@ public class DingTalkDeepHookPlugin {
             if (line.startsWith("✓") || line.startsWith("△")) anyRecallFound = true;
         }
         if (!anyRecallFound) {
+            // All known candidate class names were absent; falling back to DEX-wide scan.
             results.add("△ (已知类名均未找到, 正在使用 DEX 扫描回退...)");
             List<String> dexClasses = enumerateDexClassNames(classLoader, DEX_SCAN_PREFIXES);
             int dexHits = 0;
@@ -1062,6 +1066,7 @@ public class DingTalkDeepHookPlugin {
                 }
             }
             if (dexHits == 0) {
+                // DEX scan found no revoke/recall methods — method names may also be obfuscated.
                 results.add("✗ DEX 扫描: 未找到 revoke/recall 方法 (方法名可能也已混淆)");
             }
         }
@@ -1083,6 +1088,7 @@ public class DingTalkDeepHookPlugin {
             }
         }
         if (!anyHbFound) {
+            // All known candidate class names were absent; falling back to DEX-wide scan.
             results.add("△ (已知类名均未找到, 正在使用 DEX 扫描回退...)");
             List<String> dexClasses = enumerateDexClassNames(classLoader, DEX_SCAN_PREFIXES);
             int dexHits = 0;
@@ -1096,6 +1102,7 @@ public class DingTalkDeepHookPlugin {
                 }
             }
             if (dexHits == 0) {
+                // DEX scan found no red-packet arrival methods — method names may also be obfuscated.
                 results.add("✗ DEX 扫描: 未找到红包到达方法 (方法名可能也已混淆)");
             }
         }
