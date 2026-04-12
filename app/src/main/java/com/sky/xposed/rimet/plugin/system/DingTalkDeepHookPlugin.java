@@ -181,11 +181,28 @@ public class DingTalkDeepHookPlugin {
      * are absent (heavily obfuscated DingTalk builds).  Restricting the scan to DingTalk's
      * own packages avoids touching third-party SDK code that can never contain a recall or
      * red-packet handler, and keeps the enumeration fast.
+     *
+     * <p>DingTalk 7.5.0 ships its red-packet module under {@code com.aliaba.android.dingtalk.*}
+     * (note the missing 'b' — this is the verbatim package name in the 7.5.0 APK, not a typo).
+     * This prefix is therefore included here so the interface-based fallback can locate the
+     * {@code RedPacketInterface} implementation classes.</p>
      */
     private static final String[] DEX_SCAN_PREFIXES = {
             "com.alibaba.android.rimet.",
             "com.laiwang.",
             "com.alibaba.android.dingtalkbase.",
+            "com.aliaba.",   // DingTalk 7.5.0: red-packet module uses this spelling
+    };
+
+    /**
+     * Fully-qualified names of the DingTalk red-packet callback interface that we look for when
+     * no named {@link #HONGBAO_CLASS_CANDIDATES} are present (heavily obfuscated builds).
+     * Two spellings are tried because DingTalk 7.5.0 uses {@code com.aliaba} (missing 'b') while
+     * newer builds use the correct {@code com.alibaba} spelling.
+     */
+    private static final String[] REDPACKET_INTERFACES = {
+            "com.alibaba.android.dingtalk.redpackets.base.RedPacketInterface",
+            "com.aliaba.android.dingtalk.redpackets.base.RedPacketInterface",
     };
 
     private DingTalkDeepHookPlugin() {
@@ -698,8 +715,17 @@ public class DingTalkDeepHookPlugin {
             module.log(Log.INFO, TAG,
                     "hookAntiRecall: DEX scan found " + allClasses.size() + " package candidates");
             for (String className : allClasses) {
-                tryHookAntiRecallClass(module, classLoader, className);
+                if (tryHookAntiRecallClass(module, classLoader, className)) {
+                    anyHooked = true;
+                }
             }
+        }
+        if (!anyHooked) {
+            // Method names are also obfuscated — try annotation-based dispatch (laiwang/DingTalk
+            // uses @ProcessorMethod-style annotations on revoke handlers).
+            module.log(Log.INFO, TAG,
+                    "hookAntiRecall: method-name scan empty; trying annotation-based fallback");
+            hookAntiRecallViaAnnotation(module, classLoader);
         }
     }
 
@@ -782,8 +808,17 @@ public class DingTalkDeepHookPlugin {
             module.log(Log.INFO, TAG,
                     "hookRedPacket: DEX scan found " + allClasses.size() + " package candidates");
             for (String className : allClasses) {
-                tryHookRedPacketClass(module, classLoader, className);
+                if (tryHookRedPacketClass(module, classLoader, className)) {
+                    anyHooked = true;
+                }
             }
+        }
+        if (!anyHooked) {
+            // Method names are also obfuscated — find all classes implementing the known
+            // RedPacketInterface and hook ALL their instance methods (7.5.0 fallback).
+            module.log(Log.INFO, TAG,
+                    "hookRedPacket: method-name scan empty; trying interface-implementor fallback");
+            hookRedPacketViaInterfaceImpl(module, classLoader);
         }
     }
 
@@ -831,6 +866,199 @@ public class DingTalkDeepHookPlugin {
             module.log(Log.WARN, TAG, "hookRedPacket error for " + className, e);
             return false;
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Fallback 3: interface-implementor scan (red-packet, 7.5.0 obfuscated)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Last-resort red-packet hook for heavily obfuscated DingTalk builds (e.g. 7.5.0).
+     *
+     * <p>When {@link #HONGBAO_CLASS_CANDIDATES} all fail and the DEX method-name scan
+     * also finds nothing (because method names are obfuscated), we look for all classes
+     * that <em>implement</em> one of the known {@link #REDPACKET_INTERFACES}.  Every
+     * non-synthetic instance method in each implementor is hooked — so the arrival
+     * callback fires regardless of its obfuscated name.</p>
+     *
+     * <p>After the intercepted method returns we call {@link #invokeGrabMethod} to
+     * attempt the auto-grab, same as the normal path.</p>
+     */
+    private static void hookRedPacketViaInterfaceImpl(XposedModule module,
+            ClassLoader classLoader) {
+        for (String ifaceName : REDPACKET_INTERFACES) {
+            Class<?> iface;
+            try {
+                iface = classLoader.loadClass(ifaceName);
+            } catch (ClassNotFoundException e) {
+                continue; // Not present in this DingTalk build.
+            }
+            module.log(Log.INFO, TAG,
+                    "hookRedPacketViaInterfaceImpl: scanning implementors of " + ifaceName);
+
+            List<String> candidates = enumerateDexClassNames(classLoader, DEX_SCAN_PREFIXES);
+            int hookCount = 0;
+            for (String className : candidates) {
+                try {
+                    Class<?> cls = classLoader.loadClass(className);
+                    // Skip the interface itself, abstract classes, and non-implementors.
+                    if (cls.isInterface() || !iface.isAssignableFrom(cls)) continue;
+                    if (java.lang.reflect.Modifier.isAbstract(cls.getModifiers())) continue;
+
+                    for (Method m : cls.getDeclaredMethods()) {
+                        // Skip bridge/synthetic methods (compiler-generated forwarding stubs).
+                        if (m.isBridge() || m.isSynthetic()) continue;
+                        // Skip static methods — callbacks are always instance methods.
+                        if (java.lang.reflect.Modifier.isStatic(m.getModifiers())) continue;
+                        m.setAccessible(true);
+                        final String methodName = m.getName();
+                        final String finalClassName = className;
+                        module.hook(m).intercept(chain -> {
+                            Object result = chain.proceed();
+                            if (!SystemHookPlugin.getBoolFlag(
+                                    module, Constant.XFlag.ENABLE_RED_PACKET)) {
+                                return result;
+                            }
+                            module.log(Log.INFO, TAG,
+                                    "RedPacket(iface): auto-grabbing after "
+                                    + methodName + " in " + finalClassName);
+                            Object thiz = chain.getThisObject();
+                            if (thiz != null) {
+                                invokeGrabMethod(module, thiz, chain.getArgs().toArray());
+                            }
+                            return result;
+                        });
+                        hookCount++;
+                    }
+                    module.log(Log.INFO, TAG,
+                            "hookRedPacketViaInterfaceImpl: hooked " + className);
+                } catch (Throwable ignored) {
+                    // Class not loadable or hook failed — skip.
+                }
+            }
+            if (hookCount > 0) {
+                module.log(Log.INFO, TAG,
+                        "hookRedPacketViaInterfaceImpl: installed " + hookCount
+                        + " hooks via " + ifaceName);
+                return; // One interface is enough.
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Fallback 3: annotation-based dispatch scan (anti-recall, 7.5.0 obfuscated)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Last-resort anti-recall hook for heavily obfuscated DingTalk builds (e.g. 7.5.0).
+     *
+     * <p>DingTalk's laiwang message layer dispatches incoming messages to annotated handler
+     * methods.  Even when class and method names are obfuscated by ProGuard, the
+     * <em>annotation types</em> and their attribute values are often retained (they are
+     * used by the framework via reflection).  This method scans all DEX classes and looks
+     * for methods carrying an annotation whose type name (simple or FQ) contains a
+     * message-handler keyword <em>and</em> whose string attribute value contains a
+     * recall/revoke keyword.  Those methods are hooked to block the revoke action.</p>
+     *
+     * <p>If no annotation-matched method is found, the method also tries a broader
+     * parameter-type scan: any single-parameter void method whose parameter's simple
+     * class name contains a recall/revoke keyword (covers partially-obfuscated builds
+     * where the message-object type name survived ProGuard).</p>
+     */
+    private static void hookAntiRecallViaAnnotation(XposedModule module,
+            ClassLoader classLoader) {
+        List<String> candidates = enumerateDexClassNames(classLoader, DEX_SCAN_PREFIXES);
+        int annotationHooks = 0;
+        int signatureHooks  = 0;
+
+        for (String className : candidates) {
+            try {
+                Class<?> cls = classLoader.loadClass(className);
+                for (Method m : cls.getDeclaredMethods()) {
+                    if (m.isBridge() || m.isSynthetic()) continue;
+
+                    // ── Annotation-based detection ──────────────────────────────────────
+                    boolean annotationMatch = false;
+                    for (java.lang.annotation.Annotation ann : m.getDeclaredAnnotations()) {
+                        String annType = ann.annotationType().getName().toLowerCase(Locale.US);
+                        // Look for annotations whose type name suggests message/processor dispatch.
+                        boolean isHandlerAnnotation = annType.contains("processor")
+                                || annType.contains("handler")
+                                || annType.contains("msghandler")
+                                || annType.contains("subscribe")
+                                || annType.contains("receiver");
+                        if (!isHandlerAnnotation) continue;
+
+                        // Check if any String attribute of the annotation contains a revoke keyword.
+                        try {
+                            for (java.lang.reflect.Method attr
+                                    : ann.annotationType().getDeclaredMethods()) {
+                                Object val = attr.invoke(ann);
+                                if (val instanceof String) {
+                                    String s = ((String) val).toLowerCase(Locale.US);
+                                    if (s.contains("revoke") || s.contains("recall")
+                                            || s.contains("withdraw") || s.contains("retract")
+                                            || s.contains("unsend")) {
+                                        annotationMatch = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        } catch (Throwable ignored) {
+                        }
+                        if (annotationMatch) break;
+                    }
+
+                    // ── Parameter-type signature detection ─────────────────────────────
+                    // Fallback: void/boolean method with ≥1 param whose simple type name
+                    // contains a recall/revoke keyword (partially-obfuscated builds only).
+                    boolean signatureMatch = false;
+                    if (!annotationMatch) {
+                        Class<?> ret = m.getReturnType();
+                        boolean voidOrBool = ret == void.class || ret == boolean.class;
+                        if (voidOrBool && m.getParameterCount() >= 1) {
+                            for (Class<?> p : m.getParameterTypes()) {
+                                String pn = p.getSimpleName().toLowerCase(Locale.US);
+                                if (pn.contains("revoke") || pn.contains("recall")
+                                        || pn.contains("withdraw")) {
+                                    signatureMatch = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!annotationMatch && !signatureMatch) continue;
+
+                    m.setAccessible(true);
+                    final String methodName = m.getName();
+                    final Class<?> hookReturnType = m.getReturnType();
+                    final boolean byAnnotation = annotationMatch;
+                    module.hook(m).intercept(chain -> {
+                        if (!SystemHookPlugin.getBoolFlag(
+                                module, Constant.XFlag.ENABLE_ANTI_RECALL)) {
+                            return chain.proceed();
+                        }
+                        module.log(Log.INFO, TAG,
+                                "AntiRecall(" + (byAnnotation ? "ann" : "sig") + "): blocked "
+                                + methodName + " in " + className);
+                        Class<?> returnType = hookReturnType;
+                        if (returnType == boolean.class || returnType == Boolean.class)
+                            return false;
+                        if (returnType == int.class || returnType == Integer.class) return 0;
+                        if (returnType == long.class || returnType == Long.class) return 0L;
+                        return null;
+                    });
+                    if (annotationMatch) annotationHooks++;
+                    else signatureHooks++;
+                }
+            } catch (Throwable ignored) {
+                // Class not loadable — skip.
+            }
+        }
+        module.log(Log.INFO, TAG,
+                "hookAntiRecallViaAnnotation: installed " + annotationHooks
+                + " annotation hooks, " + signatureHooks + " signature hooks");
     }
 
     // -----------------------------------------------------------------------
@@ -1068,6 +1296,67 @@ public class DingTalkDeepHookPlugin {
             if (dexHits == 0) {
                 // DEX scan found no revoke/recall methods — method names may also be obfuscated.
                 results.add("✗ DEX 扫描: 未找到 revoke/recall 方法 (方法名可能也已混淆)");
+                // Try annotation/signature detection (informational only in probe).
+                // Annotation-based (laiwang @ProcessorMethod / @Subscribe dispatch)
+                int annHits = 0;
+                int sigHits = 0;
+                for (String className : dexClasses) {
+                    try {
+                        Class<?> cls = classLoader.loadClass(className);
+                        for (Method m : cls.getDeclaredMethods()) {
+                            if (m.isBridge() || m.isSynthetic()) continue;
+                            boolean annMatch = false;
+                            for (java.lang.annotation.Annotation ann : m.getDeclaredAnnotations()) {
+                                String annType = ann.annotationType().getName().toLowerCase(Locale.US);
+                                if (annType.contains("processor") || annType.contains("handler")
+                                        || annType.contains("subscribe") || annType.contains("receiver")) {
+                                    try {
+                                        for (java.lang.reflect.Method attr
+                                                : ann.annotationType().getDeclaredMethods()) {
+                                            Object val = attr.invoke(ann);
+                                            if (val instanceof String) {
+                                                String s = ((String) val).toLowerCase(Locale.US);
+                                                if (s.contains("revoke") || s.contains("recall")
+                                                        || s.contains("withdraw")) {
+                                                    annMatch = true; break;
+                                                }
+                                            }
+                                        }
+                                    } catch (Throwable ignored) {}
+                                }
+                                if (annMatch) break;
+                            }
+                            boolean sigMatch = false;
+                            if (!annMatch) {
+                                Class<?> ret = m.getReturnType();
+                                if ((ret == void.class || ret == boolean.class)
+                                        && m.getParameterCount() >= 1) {
+                                    for (Class<?> p : m.getParameterTypes()) {
+                                        String pn = p.getSimpleName().toLowerCase(Locale.US);
+                                        if (pn.contains("revoke") || pn.contains("recall")
+                                                || pn.contains("withdraw")) {
+                                            sigMatch = true; break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (annMatch) {
+                                results.add("✓ (ann) " + simpleClassName(className)
+                                        + "." + m.getName() + "()");
+                                annHits++;
+                            } else if (sigMatch) {
+                                results.add("✓ (sig) " + simpleClassName(className)
+                                        + "." + m.getName() + "("
+                                        + m.getParameterTypes()[0].getSimpleName() + ")");
+                                sigHits++;
+                            }
+                        }
+                    } catch (Throwable ignored) {}
+                }
+                if (annHits == 0 && sigHits == 0) {
+                    results.add("✗ 注解/签名扫描: 未找到 (方法名和参数类型均已混淆) — 需重新分析 7.5.0 APK");
+                    // No annotation/signature match — method names and param types are obfuscated.
+                }
             }
         }
 
@@ -1104,6 +1393,46 @@ public class DingTalkDeepHookPlugin {
             if (dexHits == 0) {
                 // DEX scan found no red-packet arrival methods — method names may also be obfuscated.
                 results.add("✗ DEX 扫描: 未找到红包到达方法 (方法名可能也已混淆)");
+                // Try the interface-implementor approach (informational probe).
+                results.add("── RedPacketInterface 实现类扫描 ──");
+                boolean ifaceHit = false;
+                for (String ifaceName : REDPACKET_INTERFACES) {
+                    try {
+                        Class<?> iface = classLoader.loadClass(ifaceName);
+                        String simpleIface = simpleClassName(ifaceName);
+                        int implCount = 0;
+                        int methodCount = 0;
+                        for (String className : dexClasses) {
+                            try {
+                                Class<?> cls = classLoader.loadClass(className);
+                                if (cls.isInterface() || !iface.isAssignableFrom(cls)) continue;
+                                if (java.lang.reflect.Modifier.isAbstract(cls.getModifiers())) continue;
+                                implCount++;
+                                for (Method m : cls.getDeclaredMethods()) {
+                                    if (!m.isBridge() && !m.isSynthetic()
+                                            && !java.lang.reflect.Modifier.isStatic(m.getModifiers())) {
+                                        methodCount++;
+                                    }
+                                }
+                                results.add("✓ (impl) " + simpleClassName(className)
+                                        + " implements " + simpleIface);
+                                ifaceHit = true;
+                            } catch (Throwable ignored) {}
+                        }
+                        if (implCount > 0) {
+                            results.add("  → 找到 " + implCount + " 个实现类, " + methodCount + " 个可拦截方法");
+                            // Found implementations → announce they will be hooked.
+                        } else {
+                            results.add("△ " + simpleIface + " 接口未找到实现类");
+                        }
+                    } catch (ClassNotFoundException e) {
+                        results.add("✗ " + simpleClassName(ifaceName) + " (接口未找到)");
+                    }
+                }
+                if (!ifaceHit) {
+                    results.add("✗ 接口实现扫描: 未找到实现类 — 需重新分析 7.5.0 APK 获取混淆类名");
+                    // No implementations found — need APK re-analysis to get obfuscated names.
+                }
             }
         }
 
