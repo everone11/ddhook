@@ -79,8 +79,23 @@ _MODEL_SUFFIXES = (
 
 
 def is_location_candidate(cls: str) -> bool:
-    """Return True only for classes plausibly owned by DingTalk that spoof/forward location."""
-    return not any(cls.startswith(p) for p in _THIRD_PARTY_PREFIXES)
+    """Return True only for classes plausibly owned by DingTalk that spoof/forward location.
+
+    Excludes third-party SDKs and pure data/model classes (which override getLatitude /
+    getLongitude only to return stored field values, not to intercept live GPS data).
+    """
+    if any(cls.startswith(p) for p in _THIRD_PARTY_PREFIXES):
+        return False
+    # Social-feed geo-data objects are not live-location providers
+    if cls.startswith("com.alibaba.android.dingtalk.feedscore."):
+        return False
+    # Wi-Fi service classes are not location providers
+    if cls.startswith("com.alibaba.android.rimet.service.wifi."):
+        return False
+    simple = cls.rsplit(".", 1)[-1]
+    if any(simple.endswith(s) for s in _MODEL_SUFFIXES):
+        return False
+    return True
 
 
 def is_recall_candidate(cls: str) -> bool:
