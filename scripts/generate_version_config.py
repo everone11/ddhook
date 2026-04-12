@@ -621,9 +621,31 @@ def main():
     # ── Generate RimetConfig<normalized>.java ─────────────────────────────────
     config_path = os.path.join(CONFIG_DIR, f"RimetConfig{normalized}.java")
     java_content = generate_config_java(version_name, normalized, info)
-    with open(config_path, "w", encoding="utf-8") as fh:
-        fh.write(java_content)
-    print(f"[config] wrote {config_path}")
+
+    # Don't overwrite an existing config that has more mapped entries than the
+    # freshly generated one.  This preserves manually curated files (or files
+    # produced by a previous run with a richer artifact) when the current
+    # artifact is incomplete (heavily-obfuscated APK, partial decompilation, …).
+    if os.path.exists(config_path):
+        with open(config_path, encoding="utf-8") as fh:
+            existing_content = fh.read()
+        existing_count = existing_content.count("add(")
+        new_count = java_content.count("add(")
+        if new_count < existing_count:
+            print(
+                f"[config] skipped overwrite of {config_path} "
+                f"(existing has {existing_count} add() calls, "
+                f"generated has only {new_count})"
+            )
+        else:
+            with open(config_path, "w", encoding="utf-8") as fh:
+                fh.write(java_content)
+            print(f"[config] updated {config_path} "
+                  f"({existing_count} -> {new_count} add() calls)")
+    else:
+        with open(config_path, "w", encoding="utf-8") as fh:
+            fh.write(java_content)
+        print(f"[config] wrote {config_path}")
 
     # ── Update VersionManager.java ────────────────────────────────────────────
     update_version_manager(version_name, normalized)
