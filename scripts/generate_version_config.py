@@ -46,6 +46,90 @@ def is_real_class(name: str) -> bool:
     return "." in name and not name.startswith("defpackage.")
 
 
+# Third-party SDK package prefixes that are bundled inside the DingTalk APK but are
+# NOT DingTalk's own code and should never be treated as hook targets.
+_THIRD_PARTY_PREFIXES = (
+    "com.google.",
+    "com.autonavi.",
+    "androidx.",
+    "android.",
+    "com.alibaba.ariver.",   # Rax/H5 web runtime
+    "com.alibaba.doraemon.", # internal diagnostics
+    "com.alibaba.ailabs.",
+    "com.alibaba.aliweex.",
+)
+
+# Simple-name suffixes that indicate a plain data/model class rather than a service
+# or handler that would actually contain a hook-target method.
+_MODEL_SUFFIXES = (
+    "Model", "RequestModel", "ResponseModel",
+    "Object", "Do",
+    "Data", "RequestData",
+    "Columns", "Result", "QueryResult",
+    "Request", "Response",   # bare DTO names
+    "View",        # UI widget
+    "Event",       # event bus payload
+    "Entrance",    # UI entry-point data
+    "Resource",    # resource bag
+    "Theme",       # UI theming
+    "Param",       # plain parameter bag
+    "Ext",         # extension data
+    "Text",        # text data
+)
+
+
+def is_location_candidate(cls: str) -> bool:
+    """Return True only for classes plausibly owned by DingTalk that spoof/forward location."""
+    return not any(cls.startswith(p) for p in _THIRD_PARTY_PREFIXES)
+
+
+def is_recall_candidate(cls: str) -> bool:
+    """Return True for classes that could plausibly implement a recall/revoke message handler.
+
+    Excludes:
+    - Third-party SDKs
+    - Mail-revoke classes from com.alibaba.alimei (different subsystem)
+    - Resource class (com.alibaba.android.rimet.R)
+    - Pure data/model classes identified by well-known simple-name suffixes
+    """
+    if any(cls.startswith(p) for p in _THIRD_PARTY_PREFIXES):
+        return False
+    # Mail module — different from IM recall
+    if cls.startswith("com.alibaba.alimei."):
+        return False
+    # Resource class
+    if cls.endswith(".R"):
+        return False
+    simple = cls.rsplit(".", 1)[-1]
+    if any(simple.endswith(s) for s in _MODEL_SUFFIXES):
+        return False
+    return True
+
+
+def is_hongbao_candidate(cls: str) -> bool:
+    """Return True for classes that plausibly contain a red-packet receipt/open method.
+
+    Only classes whose simple name ends with a 'manager / service / impl' suffix are
+    likely to contain callback methods like onReceiveNewHb.
+    """
+    if any(cls.startswith(p) for p in _THIRD_PARTY_PREFIXES):
+        return False
+    # Auto-generated proxy classes ($$) are rarely the real hook target
+    simple = cls.rsplit(".", 1)[-1]
+    if "$$" in simple:
+        return False
+    _HANDLER_SUFFIXES = (
+        "Manager", "ManagerImpl",
+        "Service",
+        "Processor",
+        "Handler",
+        "Interface", "Impl",
+        "Controller",
+        "Dispatcher",
+    )
+    return any(simple.endswith(s) for s in _HANDLER_SUFFIXES)
+
+
 def parse_section(content: str, header: str) -> list:
     """Return non-empty, stripped lines between '### <header>' and the next '### ' heading."""
     start = content.find(f"### {header}")
@@ -148,27 +232,30 @@ def parse_report(report_path: str) -> dict:
     # ── Anti-recall candidates ───────────────────────────────────────────────
     recall_classes_direct = [c for c in parse_section(
         content, "Anti-recall: message revoke / recall classes")
-        if is_real_class(c)]
+        if is_real_class(c) and is_recall_candidate(c)]
 
     # Also extract class names inferred from method-reference lines
     recall_from_methods = [
         extract_class_from_method_line(line)
         for line in parse_section(content, "Anti-recall: onRevokeMsg / revokeMsg methods")
     ]
-    recall_from_methods = [c for c in recall_from_methods if is_real_class(c)]
+    recall_from_methods = [c for c in recall_from_methods
+                           if is_real_class(c) and is_recall_candidate(c)]
 
     all_recall = list(dict.fromkeys(recall_classes_direct + recall_from_methods))  # dedup, order-preserving
 
+    # Use ConvMsgService if present; otherwise only fall back to the first candidate when
+    # that candidate came from an actual method-reference line (more reliable signal).
     info["recall_class"] = next(
         (c for c in all_recall if "ConvMsgService" in c),
-        all_recall[0] if all_recall else None,
+        recall_from_methods[0] if recall_from_methods else None,
     )
     info["all_recall_classes"] = all_recall
 
     # ── Red-packet candidates ────────────────────────────────────────────────
     hongbao_classes_direct = [c for c in parse_section(
         content, "Red-packet: HongBao / HB manager classes")
-        if is_real_class(c)]
+        if is_real_class(c) and is_hongbao_candidate(c)]
 
     hongbao_from_methods = [
         extract_class_from_method_line(line)
@@ -176,13 +263,14 @@ def parse_report(report_path: str) -> dict:
             content,
             "Red-packet: onReceiveNewHb / onReceiveHongBao / openHongBao methods")
     ]
-    hongbao_from_methods = [c for c in hongbao_from_methods if is_real_class(c)]
+    hongbao_from_methods = [c for c in hongbao_from_methods
+                            if is_real_class(c) and is_hongbao_candidate(c)]
 
     all_hongbao = list(dict.fromkeys(hongbao_classes_direct + hongbao_from_methods))
 
     info["hongbao_class"] = next(
         (c for c in all_hongbao if "HongBaoManagerImpl" in c),
-        all_hongbao[0] if all_hongbao else None,
+        hongbao_from_methods[0] if hongbao_from_methods else None,
     )
     info["all_hongbao_classes"] = all_hongbao
 
@@ -190,7 +278,7 @@ def parse_report(report_path: str) -> dict:
     # Classes from the three new virtual-location sections in the report.
     loc_direct = [c for c in parse_section(
         content, "Virtual location: GMapLocation and LocationProxy candidates")
-        if is_real_class(c)]
+        if is_real_class(c) and is_location_candidate(c)]
 
     # Extract class names from onLocationChanged method-reference lines
     loc_from_on_changed = [
@@ -198,12 +286,13 @@ def parse_report(report_path: str) -> dict:
         for line in parse_section(
             content, "Virtual location: onLocationChanged implementations")
     ]
-    loc_from_on_changed = [c for c in loc_from_on_changed if is_real_class(c)]
+    loc_from_on_changed = [c for c in loc_from_on_changed
+                           if is_real_class(c) and is_location_candidate(c)]
 
     # Extract class names from getLatitude/getLongitude override file list
     loc_from_override = [c for c in parse_section(
         content, "Virtual location: getLatitude / getLongitude overrides (DingTalk-specific)")
-        if is_real_class(c)]
+        if is_real_class(c) and is_location_candidate(c)]
 
     all_location = list(dict.fromkeys(
         loc_direct + loc_from_on_changed + loc_from_override))

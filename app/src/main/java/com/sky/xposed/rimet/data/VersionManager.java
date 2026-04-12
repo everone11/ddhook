@@ -24,6 +24,7 @@ import android.util.Log;
 import com.sky.xposed.rimet.Constant;
 import com.sky.xposed.rimet.data.config.RimetConfig4617;
 import com.sky.xposed.rimet.data.config.RimetConfig830;
+import com.sky.xposed.rimet.data.config.RimetConfig750;
 import com.sky.xposed.rimet.plugin.interfaces.XConfig;
 import com.sky.xposed.rimet.plugin.interfaces.XVersionManager;
 
@@ -69,7 +70,7 @@ public class VersionManager implements XVersionManager {
         // DingTalk version configurations
         CONFIG_MAP.put("4.6.17", RimetConfig4617.class);
         // 7.5.0 uses the same config as 4.6.17 as an initial compatibility mapping
-        CONFIG_MAP.put("7.5.0", RimetConfig4617.class);
+        CONFIG_MAP.put("7.5.0", RimetConfig750.class);
         // DingTalk 8.3.0
         CONFIG_MAP.put("8.3.0", RimetConfig830.class);
 
