@@ -163,9 +163,6 @@ public class DingTalkDeepHookPlugin {
             // DingTalk 8.x: LocationProxy (dispatches AMapLocation to DingTalk internals)
             "com.alibaba.android.dingtalkbase.amap.LocationProxy",
             "com.alibaba.android.dingtalkbase.amap.GMapLocationListener", // Auto-added from APK analysis
-            "com.alibaba.android.dingtalk.feedscore.idl.objects.SNGeoContentObject", // Auto-added from APK analysis
-            "com.alibaba.android.dingtalk.feedscore.onecircle.model.GeoDataObject", // Auto-added from APK analysis
-            "com.alibaba.android.rimet.service.wifi.C12935a", // Auto-added from APK analysis
             "com.alibaba.android.rimet.model.DtLocation", // Auto-added from APK analysis
     };
 
