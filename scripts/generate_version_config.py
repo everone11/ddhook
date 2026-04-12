@@ -420,11 +420,14 @@ def _insert_before_array_close(content: str, array_name: str, new_classes: list)
     if close_idx == -1:
         return content
 
+    # Insert before the start of the line that contains "};", so the new entries
+    # get 12-space indent (matching existing array entries) while "    };" stays intact.
+    line_start = content.rfind("\n", 0, close_idx) + 1
     insertion = "".join(
         f'            "{cls}", // Auto-added from APK analysis\n'
         for cls in new_classes
     )
-    return content[:close_idx] + insertion + "    " + content[close_idx:]
+    return content[:line_start] + insertion + content[line_start:]
 
 
 def update_deep_hook_plugin(all_recall: list, all_hongbao: list, all_location: list) -> bool:
