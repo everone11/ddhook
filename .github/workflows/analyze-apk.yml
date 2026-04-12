@@ -44,7 +44,15 @@ jobs:
       - name: Decompile APK with jadx
         run: |
           echo "Decompiling APK (sources only, no resources)..."
-          /tmp/jadx/bin/jadx --deobf --no-res -d /tmp/jadx-out /tmp/dingtalk.apk || true
+          # --deobf            : activate deobfuscation (rename short obfuscated identifiers)
+          # --deobf-use-sourcename : prefer the SourceFile attribute embedded in the bytecode
+          #                     as the class name (many ProGuard configs keep it).  This often
+          #                     restores names like ConvMsgService / HongBaoManagerImpl so that
+          #                     the grep patterns below can find them even in obfuscated builds.
+          # When jadx renames a class it also adds a "/* renamed from: com.a.b.c */" comment
+          # which is used below to recover the original runtime class name for hooking.
+          /tmp/jadx/bin/jadx --deobf --deobf-use-sourcename --no-res \
+            -d /tmp/jadx-out /tmp/dingtalk.apk || true
           echo "Decompilation done. Source files:"
           find /tmp/jadx-out -name "*.java" | wc -l
 
@@ -54,42 +62,71 @@ jobs:
           echo "=== DingTalk ${{ inputs.version_name }} Hook-Relevant Classes ===" > $OUT
           echo "" >> $OUT
 
-          search_class() {
-            local label="$1"
-            local pattern="$2"
-            echo "--- $label ---" >> $OUT
-            find /tmp/jadx-out -name "*.java" -path "*$pattern*" | sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT
-            echo "" >> $OUT
+          # ── Helper: return the ORIGINAL runtime class name for a jadx-decompiled file.
+          # jadx --deobf adds a "/* renamed from: com.a.b.c */" comment at the top of every
+          # class it renames.  We read that annotation so that the extracted name is the real
+          # DEX/runtime name (which is what DingTalkDeepHookPlugin needs for loadClass).
+          # Falls back to deriving the name from the file path if no annotation is present.
+          get_runtime_class() {
+            local file="$1"
+            local orig
+            orig=$(grep -m1 "renamed from:" "$file" 2>/dev/null \
+                   | sed 's|.*renamed from: \([^ */]*\).*|\1|')
+            if [ -n "$orig" ] && echo "$orig" | grep -q '\.'; then
+              echo "$orig"
+            else
+              echo "$file" | sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g'
+            fi
+          }
+
+          # ── Helper: rewrite a grep match line "relpath/File.java:N:  code" so that the
+          # file-path portion reflects the original runtime class path instead of jadx's
+          # renamed path.  generate_version_config.py's extract_class_from_method_line()
+          # reads the path, so this ensures it gets the real class name.
+          rewrite_method_match_line() {
+            local line="$1"
+            local filepath="${line%%:*}"                          # e.g. com/a/b/File.java
+            local fullpath="/tmp/jadx-out/sources/$filepath"
+            local orig
+            orig=$(grep -m1 "renamed from:" "$fullpath" 2>/dev/null \
+                   | sed 's|.*renamed from: \([^ */]*\).*|\1|')
+            if [ -n "$orig" ] && echo "$orig" | grep -q '\.'; then
+              local origpath
+              origpath=$(echo "$orig" | tr '.' '/').java        # com/a/b/c.java
+              echo "${line/$filepath/$origpath}"
+            else
+              echo "$line"
+            fi
           }
 
           echo "### LauncherApplication candidates" >> $OUT
           grep -r "class LauncherApplication" /tmp/jadx-out --include="*.java" -l | \
-            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
+            while IFS= read -r f; do get_runtime_class "$f"; done >> $OUT || true
           echo "" >> $OUT
 
           echo "### DDApplication candidates" >> $OUT
           grep -r "class DDApplication" /tmp/jadx-out --include="*.java" -l | \
-            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
+            while IFS= read -r f; do get_runtime_class "$f"; done >> $OUT || true
           echo "" >> $OUT
 
           echo "### LightAppRuntime candidates" >> $OUT
           grep -r "class LightAppRuntime" /tmp/jadx-out --include="*.java" -l | \
-            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
+            while IFS= read -r f; do get_runtime_class "$f"; done >> $OUT || true
           echo "" >> $OUT
 
           echo "### initSecurityGuard method location" >> $OUT
           grep -r "initSecurityGuard" /tmp/jadx-out --include="*.java" -l | \
-            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
+            while IFS= read -r f; do get_runtime_class "$f"; done >> $OUT || true
           echo "" >> $OUT
 
           echo "### NewSettingActivity candidates" >> $OUT
           grep -r "class NewSettingActivity\|class.*SettingActivity" /tmp/jadx-out --include="*.java" -l | \
-            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
+            while IFS= read -r f; do get_runtime_class "$f"; done >> $OUT || true
           echo "" >> $OUT
 
           echo "### UserSettingsActivity / OneSettingActivity candidates" >> $OUT
           grep -r "class UserSettingsActivity\|class.*UserSettings\|class OneSettingActivity" /tmp/jadx-out --include="*.java" -l | \
-            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
+            while IFS= read -r f; do get_runtime_class "$f"; done >> $OUT || true
           echo "" >> $OUT
 
           echo "### setting_msg_notice resource references" >> $OUT
@@ -98,7 +135,7 @@ jobs:
 
           echo "### Anti-recall: message revoke / recall classes (by class name)" >> $OUT
           grep -r "class.*[Rr]evoke\|class.*[Rr]ecall\|class ConvMsgService\|class.*ConvMsg" /tmp/jadx-out --include="*.java" -l | \
-            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
+            while IFS= read -r f; do get_runtime_class "$f"; done >> $OUT || true
           echo "" >> $OUT
 
           echo "### Anti-recall: classes containing revoke/recall METHOD bodies (obfuscation-robust)" >> $OUT
@@ -107,35 +144,37 @@ jobs:
           grep -rl "revoke\|recall\|withdraw\|retract\|unsend" /tmp/jadx-out --include="*.java" | \
             grep -i "com/alibaba/android/rimet\|com/laiwang" | \
             xargs grep -l "void " 2>/dev/null | \
-            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' | head -30 >> $OUT || true
+            while IFS= read -r f; do get_runtime_class "$f"; done | head -30 >> $OUT || true
           echo "" >> $OUT
 
           echo "### Anti-recall: onRevokeMsg / revokeMsg / recall method declarations" >> $OUT
           grep -rn "void onRevokeMsg\|void revokeMsg\|void.*[Rr]evokeMessage\|void process.*[Rr]evoke\|void.*[Rr]ecall" /tmp/jadx-out --include="*.java" | \
-            sed 's|.*/jadx-out/sources/||' | head -30 >> $OUT || true
+            sed 's|.*/jadx-out/sources/||' | \
+            while IFS= read -r line; do rewrite_method_match_line "$line"; done | head -30 >> $OUT || true
           echo "" >> $OUT
 
           echo "### Anti-recall: files with revoke/recall in com.alibaba.android.rimet packages" >> $OUT
           grep -rln "revoke\|recall" /tmp/jadx-out --include="*.java" | \
             grep "com/alibaba/android/rimet\|com/laiwang" | \
-            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' | head -30 >> $OUT || true
+            while IFS= read -r f; do get_runtime_class "$f"; done | head -30 >> $OUT || true
           echo "" >> $OUT
 
           echo "### Red-packet: HongBao / HB manager classes (by class name)" >> $OUT
           grep -r "class.*HongBao\|class.*HongBaoManager\|class.*HbManager\|class.*RedPacket" /tmp/jadx-out --include="*.java" -l | \
-            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
+            while IFS= read -r f; do get_runtime_class "$f"; done >> $OUT || true
           echo "" >> $OUT
 
           echo "### Red-packet: classes containing hongbao/redpacket METHOD bodies (obfuscation-robust)" >> $OUT
           # Find any class (regardless of name) that references hongbao/redpacket strings or method names.
           grep -rl "hongbao\|HongBao\|redpacket\|RedPacket\|hbmanager\|onReceiveNew\|grabHb\|openHb" /tmp/jadx-out --include="*.java" | \
             grep -i "com/alibaba/android/rimet\|com/laiwang" | \
-            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' | head -30 >> $OUT || true
+            while IFS= read -r f; do get_runtime_class "$f"; done | head -30 >> $OUT || true
           echo "" >> $OUT
 
           echo "### Red-packet: onReceiveNewHb / onReceiveHongBao / openHongBao methods" >> $OUT
           grep -rn "onReceiveNewHb\|onReceiveHongBao\|openHongBao\|grabHongBao\|receiveHb\|openHb\|grabHb\|onNewHb\|pushHb\|newHb" /tmp/jadx-out --include="*.java" | \
-            grep -v "^\s*//" | sed 's|.*/jadx-out/sources/||' | head -30 >> $OUT || true
+            grep -v "^\s*//" | sed 's|.*/jadx-out/sources/||' | \
+            while IFS= read -r line; do rewrite_method_match_line "$line"; done | head -30 >> $OUT || true
           echo "" >> $OUT
 
           echo "### alibaba package top-level structure" >> $OUT
@@ -145,21 +184,22 @@ jobs:
           echo "### Virtual location: GMapLocation and LocationProxy candidates" >> $OUT
           grep -r "class GMapLocation\|class LocationProxy\|class.*LocationProxy" /tmp/jadx-out --include="*.java" -l | \
             grep -v "com/amap\|com/alipay" | \
-            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
+            while IFS= read -r f; do get_runtime_class "$f"; done >> $OUT || true
           echo "" >> $OUT
 
           echo "### Virtual location: onLocationChanged implementations" >> $OUT
           grep -rn "void onLocationChanged" /tmp/jadx-out --include="*.java" | \
             grep -vE "^\s*//" | \
             grep -v "com/amap\|com/alipay" | \
-            sed 's|.*/jadx-out/sources/||' | head -20 >> $OUT || true
+            sed 's|.*/jadx-out/sources/||' | \
+            while IFS= read -r line; do rewrite_method_match_line "$line"; done | head -20 >> $OUT || true
           echo "" >> $OUT
 
           echo "### Virtual location: getLatitude / getLongitude overrides (DingTalk-specific)" >> $OUT
           grep -rn "@Override" /tmp/jadx-out --include="*.java" -l | \
             xargs grep -l "getLatitude\|getLongitude" 2>/dev/null | \
             grep -v "com/amap\|com/alipay\|android/location" | \
-            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' | head -20 >> $OUT || true
+            while IFS= read -r f; do get_runtime_class "$f"; done | head -20 >> $OUT || true
           echo "" >> $OUT
 
           cat $OUT
