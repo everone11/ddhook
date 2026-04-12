@@ -28,8 +28,6 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     permissions:
       contents: write       # push the new branch
@@ -38,7 +36,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # Use the default GITHUB_TOKEN so the push + PR creation works.
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -58,7 +56,7 @@ jobs:
 
       # ── Download the class-names artifact produced by analyze-apk.yml ──────
       - name: Download class-names artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           # Cross-workflow artifact download requires the run ID and a token.
           run-id: ${{ steps.source.outputs.run_id }}
