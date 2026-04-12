@@ -125,10 +125,16 @@ jobs:
             echo "> Source analysis run: ${{ github.event.workflow_run.html_url }}"
           } > /tmp/pr_body.md
 
-          # Create PR (idempotent: gh pr create exits 0 if PR already exists)
-          gh pr create \
-            --base main \
-            --head "$BRANCH" \
-            --title "feat: auto-adapt DingTalk ${VERSION}" \
-            --body-file /tmp/pr_body.md \
-            || echo "PR already exists or creation skipped."
+          # Create PR only when one doesn't already exist for this branch.
+          # (gh pr create exits non-zero for permission errors AND for
+          #  "already exists", so we check explicitly to surface real failures.)
+          if gh pr list --head "$BRANCH" --json number --jq '.[0].number' \
+               | grep -qE '^[0-9]+$'; then
+            echo "Pull request for branch '$BRANCH' already exists — skipping creation."
+          else
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "feat: auto-adapt DingTalk ${VERSION}" \
+              --body-file /tmp/pr_body.md
+          fi
