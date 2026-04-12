@@ -62,6 +62,13 @@ jobs:
           echo "=== DingTalk ${{ inputs.version_name }} Hook-Relevant Classes ===" > $OUT
           echo "" >> $OUT
 
+          # ── Shared helper: return true if $1 looks like a fully-qualified Java class name.
+          # Accepts names like "com.a.B", "com.alibaba.android.rimet.biz.a.b$Inner".
+          # Rejects empty strings, names with spaces or slashes, and single-component names.
+          is_fqn() {
+            [[ "$1" =~ ^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z0-9_\$][a-zA-Z0-9_\$]*)+$ ]]
+          }
+
           # ── Helper: return the ORIGINAL runtime class name for a jadx-decompiled file.
           # jadx --deobf adds a "/* renamed from: com.a.b.c */" comment at the top of every
           # class it renames.  We read that annotation so that the extracted name is the real
@@ -72,7 +79,7 @@ jobs:
             local orig
             orig=$(grep -m1 "renamed from:" "$file" 2>/dev/null \
                    | sed 's|.*renamed from: \([^ */]*\).*|\1|')
-            if [ -n "$orig" ] && echo "$orig" | grep -q '\.'; then
+            if is_fqn "$orig"; then
               echo "$orig"
             else
               echo "$file" | sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g'
@@ -90,7 +97,7 @@ jobs:
             local orig
             orig=$(grep -m1 "renamed from:" "$fullpath" 2>/dev/null \
                    | sed 's|.*renamed from: \([^ */]*\).*|\1|')
-            if [ -n "$orig" ] && echo "$orig" | grep -q '\.'; then
+            if is_fqn "$orig"; then
               local origpath
               origpath=$(echo "$orig" | tr '.' '/').java        # com/a/b/c.java
               echo "${line/$filepath/$origpath}"
