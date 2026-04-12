@@ -149,7 +149,7 @@ jobs:
           # Find any class (regardless of name) that declares a method with revoke/recall in its body.
           # This catches obfuscated class names where the method name or string literal reveals intent.
           grep -rl "revoke\|recall\|withdraw\|retract\|unsend" /tmp/jadx-out --include="*.java" | \
-            grep -i "com/alibaba/android/rimet\|com/laiwang" | \
+            grep -i "com/alibaba/android/rimet\|com/laiwang\|com/aliaba/" | \
             xargs grep -l "void " 2>/dev/null | \
             while IFS= read -r f; do get_runtime_class "$f"; done | head -30 >> $OUT || true
           echo "" >> $OUT
@@ -162,7 +162,7 @@ jobs:
 
           echo "### Anti-recall: files with revoke/recall in com.alibaba.android.rimet packages" >> $OUT
           grep -rln "revoke\|recall" /tmp/jadx-out --include="*.java" | \
-            grep "com/alibaba/android/rimet\|com/laiwang" | \
+            grep "com/alibaba/android/rimet\|com/laiwang\|com/aliaba/" | \
             while IFS= read -r f; do get_runtime_class "$f"; done | head -30 >> $OUT || true
           echo "" >> $OUT
 
@@ -174,7 +174,7 @@ jobs:
           echo "### Red-packet: classes containing hongbao/redpacket METHOD bodies (obfuscation-robust)" >> $OUT
           # Find any class (regardless of name) that references hongbao/redpacket strings or method names.
           grep -rl "hongbao\|HongBao\|redpacket\|RedPacket\|hbmanager\|onReceiveNew\|grabHb\|openHb" /tmp/jadx-out --include="*.java" | \
-            grep -i "com/alibaba/android/rimet\|com/laiwang" | \
+            grep -i "com/alibaba/android/rimet\|com/laiwang\|com/aliaba/" | \
             while IFS= read -r f; do get_runtime_class "$f"; done | head -30 >> $OUT || true
           echo "" >> $OUT
 
