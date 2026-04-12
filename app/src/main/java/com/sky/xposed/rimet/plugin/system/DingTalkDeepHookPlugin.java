@@ -709,11 +709,7 @@ public class DingTalkDeepHookPlugin {
             }
         }
         if (!anyHooked) {
-            module.log(Log.INFO, TAG,
-                    "hookAntiRecall: no named candidates found; starting DEX fallback scan");
             List<String> allClasses = enumerateDexClassNames(classLoader, DEX_SCAN_PREFIXES);
-            module.log(Log.INFO, TAG,
-                    "hookAntiRecall: DEX scan found " + allClasses.size() + " package candidates");
             for (String className : allClasses) {
                 if (tryHookAntiRecallClass(module, classLoader, className)) {
                     anyHooked = true;
@@ -723,8 +719,6 @@ public class DingTalkDeepHookPlugin {
         if (!anyHooked) {
             // Method names are also obfuscated — try annotation-based dispatch (laiwang/DingTalk
             // uses @ProcessorMethod-style annotations on revoke handlers).
-            module.log(Log.INFO, TAG,
-                    "hookAntiRecall: method-name scan empty; trying annotation-based fallback");
             hookAntiRecallViaAnnotation(module, classLoader);
         }
     }
@@ -744,14 +738,11 @@ public class DingTalkDeepHookPlugin {
                 if (!matchesAny(m.getName(), RECALL_METHOD_PATTERNS)) continue;
                 if (java.lang.reflect.Modifier.isAbstract(m.getModifiers())) continue;
                 m.setAccessible(true);
-                final String methodName = m.getName();
                 final Class<?> hookReturnType = m.getReturnType();
                 module.hook(m).intercept(chain -> {
                     if (!SystemHookPlugin.getBoolFlag(module, Constant.XFlag.ENABLE_ANTI_RECALL)) {
                         return chain.proceed();
                     }
-                    module.log(Log.INFO, TAG,
-                            "AntiRecall: blocked " + methodName + " in " + className);
                     // Return null / 0 / false depending on return type to satisfy callers.
                     Class<?> returnType = hookReturnType;
                     if (returnType == boolean.class || returnType == Boolean.class) return false;
@@ -803,11 +794,7 @@ public class DingTalkDeepHookPlugin {
             }
         }
         if (!anyHooked) {
-            module.log(Log.INFO, TAG,
-                    "hookRedPacket: no named candidates found; starting DEX fallback scan");
             List<String> allClasses = enumerateDexClassNames(classLoader, DEX_SCAN_PREFIXES);
-            module.log(Log.INFO, TAG,
-                    "hookRedPacket: DEX scan found " + allClasses.size() + " package candidates");
             for (String className : allClasses) {
                 if (tryHookRedPacketClass(module, classLoader, className)) {
                     anyHooked = true;
@@ -817,8 +804,6 @@ public class DingTalkDeepHookPlugin {
         if (!anyHooked) {
             // Method names are also obfuscated — find all classes implementing the known
             // RedPacketInterface and hook ALL their instance methods (7.5.0 fallback).
-            module.log(Log.INFO, TAG,
-                    "hookRedPacket: method-name scan empty; trying interface-implementor fallback");
             hookRedPacketViaInterfaceImpl(module, classLoader);
         }
     }
@@ -838,15 +823,12 @@ public class DingTalkDeepHookPlugin {
             for (Method m : cls.getDeclaredMethods()) {
                 if (!isHongBaoArrivalMethod(m.getName())) continue;
                 m.setAccessible(true);
-                final String methodName = m.getName();
                 module.hook(m).intercept(chain -> {
                     // Let the original method run first so the HongBao is registered.
                     Object result = chain.proceed();
                     if (!SystemHookPlugin.getBoolFlag(module, Constant.XFlag.ENABLE_RED_PACKET)) {
                         return result;
                     }
-                    module.log(Log.INFO, TAG,
-                            "RedPacket: auto-grabbing after " + methodName + " in " + className);
                     // Attempt to invoke grab/open on the same object instance.
                     Object thiz = chain.getThisObject();
                     if (thiz != null) {
@@ -894,8 +876,6 @@ public class DingTalkDeepHookPlugin {
             } catch (ClassNotFoundException e) {
                 continue; // Not present in this DingTalk build.
             }
-            module.log(Log.INFO, TAG,
-                    "hookRedPacketViaInterfaceImpl: scanning implementors of " + ifaceName);
 
             List<String> candidates = enumerateDexClassNames(classLoader, DEX_SCAN_PREFIXES);
             int hookCount = 0;
@@ -912,17 +892,12 @@ public class DingTalkDeepHookPlugin {
                         // Skip static methods — callbacks are always instance methods.
                         if (java.lang.reflect.Modifier.isStatic(m.getModifiers())) continue;
                         m.setAccessible(true);
-                        final String methodName = m.getName();
-                        final String finalClassName = className;
                         module.hook(m).intercept(chain -> {
                             Object result = chain.proceed();
                             if (!SystemHookPlugin.getBoolFlag(
                                     module, Constant.XFlag.ENABLE_RED_PACKET)) {
                                 return result;
                             }
-                            module.log(Log.INFO, TAG,
-                                    "RedPacket(iface): auto-grabbing after "
-                                    + methodName + " in " + finalClassName);
                             Object thiz = chain.getThisObject();
                             if (thiz != null) {
                                 invokeGrabMethod(module, thiz, chain.getArgs().toArray());
@@ -931,8 +906,6 @@ public class DingTalkDeepHookPlugin {
                         });
                         hookCount++;
                     }
-                    module.log(Log.INFO, TAG,
-                            "hookRedPacketViaInterfaceImpl: hooked " + className);
                 } catch (Throwable ignored) {
                     // Class not loadable or hook failed — skip.
                 }
@@ -1032,17 +1005,12 @@ public class DingTalkDeepHookPlugin {
                     if (!annotationMatch && !signatureMatch) continue;
 
                     m.setAccessible(true);
-                    final String methodName = m.getName();
                     final Class<?> hookReturnType = m.getReturnType();
-                    final boolean byAnnotation = annotationMatch;
                     module.hook(m).intercept(chain -> {
                         if (!SystemHookPlugin.getBoolFlag(
                                 module, Constant.XFlag.ENABLE_ANTI_RECALL)) {
                             return chain.proceed();
                         }
-                        module.log(Log.INFO, TAG,
-                                "AntiRecall(" + (byAnnotation ? "ann" : "sig") + "): blocked "
-                                + methodName + " in " + className);
                         Class<?> returnType = hookReturnType;
                         if (returnType == boolean.class || returnType == Boolean.class)
                             return false;
@@ -1057,9 +1025,11 @@ public class DingTalkDeepHookPlugin {
                 // Class not loadable — skip.
             }
         }
-        module.log(Log.INFO, TAG,
-                "hookAntiRecallViaAnnotation: installed " + annotationHooks
-                + " annotation hooks, " + signatureHooks + " signature hooks");
+        if (annotationHooks + signatureHooks > 0) {
+            module.log(Log.INFO, TAG,
+                    "hookAntiRecallViaAnnotation: installed " + annotationHooks
+                    + " annotation hooks, " + signatureHooks + " signature hooks");
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -1138,7 +1108,6 @@ public class DingTalkDeepHookPlugin {
                     } else {
                         continue; // Arity mismatch — try next candidate.
                     }
-                    module.log(Log.INFO, TAG, "RedPacket: invoked " + name + " successfully");
                     return;
                 } catch (Throwable e) {
                     module.log(Log.WARN, TAG, "RedPacket: " + name + " invoke failed", e);
