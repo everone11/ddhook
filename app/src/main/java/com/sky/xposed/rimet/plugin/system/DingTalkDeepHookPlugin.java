@@ -742,6 +742,7 @@ public class DingTalkDeepHookPlugin {
             boolean hooked = false;
             for (Method m : cls.getDeclaredMethods()) {
                 if (!matchesAny(m.getName(), RECALL_METHOD_PATTERNS)) continue;
+                if (java.lang.reflect.Modifier.isAbstract(m.getModifiers())) continue;
                 m.setAccessible(true);
                 final String methodName = m.getName();
                 final Class<?> hookReturnType = m.getReturnType();
