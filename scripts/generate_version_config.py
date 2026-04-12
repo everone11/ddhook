@@ -637,10 +637,12 @@ def main():
                 f"(existing has {existing_count} add() calls, "
                 f"generated has only {new_count})"
             )
+        elif java_content == existing_content:
+            print(f"[config] no change in {config_path} — skipped")
         else:
             with open(config_path, "w", encoding="utf-8") as fh:
                 fh.write(java_content)
-            print(f"[config] updated {config_path} "
+            print(f"[config] overwrote {config_path} "
                   f"({existing_count} -> {new_count} add() calls)")
     else:
         with open(config_path, "w", encoding="utf-8") as fh:

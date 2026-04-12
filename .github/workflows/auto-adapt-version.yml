@@ -128,9 +128,10 @@ jobs:
           # Create PR only when one doesn't already exist for this branch.
           # (gh pr create exits non-zero for permission errors AND for
           #  "already exists", so we check explicitly to surface real failures.)
-          if gh pr list --head "$BRANCH" --json number --jq '.[0].number' \
-               | grep -qE '^[0-9]+$'; then
-            echo "Pull request for branch '$BRANCH' already exists — skipping creation."
+          EXISTING_PR=$(gh pr list --head "$BRANCH" --state open --limit 1 \
+                          --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "$EXISTING_PR" ]; then
+            echo "Pull request #${EXISTING_PR} for branch '$BRANCH' already exists — skipping creation."
           else
             gh pr create \
               --base main \
