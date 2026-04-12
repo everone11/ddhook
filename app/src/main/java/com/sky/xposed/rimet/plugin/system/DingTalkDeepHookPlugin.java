@@ -25,9 +25,11 @@ import android.widget.Toast;
 
 import com.sky.xposed.rimet.Constant;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -57,13 +59,16 @@ import io.github.libxposed.api.XposedModule;
  * <p>Anti-recall: scans all declared methods of each class in {@code RECALL_CLASS_CANDIDATES}
  * and hooks every method whose name contains a recall/revoke keyword (e.g. "revoke",
  * "recall", "withdraw").  This means the hook automatically adapts when DingTalk renames
- * the method in a future version without requiring a manual config update.</p>
+ * the method in a future version without requiring a manual config update.  If none of the
+ * named candidate classes are found (heavily obfuscated builds), a full DEX-file scan of
+ * DingTalk's own packages is performed as a fallback.</p>
  *
  * <p>Red-packet grabbing: scans all declared methods of each class in
  * {@code HONGBAO_CLASS_CANDIDATES} and hooks every method that looks like a "new red packet
  * arrived" callback (name contains a red-packet keyword AND an arrival keyword such as
  * "new", "receive", "push").  After the callback fires, the grab/open action is attempted
- * automatically via {@link #invokeGrabMethod}.</p>
+ * automatically via {@link #invokeGrabMethod}.  The same DEX-scan fallback applies when all
+ * named candidates are absent.</p>
  */
 public class DingTalkDeepHookPlugin {
 
@@ -167,6 +172,18 @@ public class DingTalkDeepHookPlugin {
             "com.alibaba.android.dingtalkbase.amap.LocationProxy",
             "com.alibaba.android.dingtalkbase.amap.GMapLocationListener", // Auto-added from APK analysis
             "com.alibaba.android.rimet.model.DtLocation", // Auto-added from APK analysis
+    };
+
+    /**
+     * Package prefixes used by the DEX-scan fallback when all named candidate class names
+     * are absent (heavily obfuscated DingTalk builds).  Restricting the scan to DingTalk's
+     * own packages avoids touching third-party SDK code that can never contain a recall or
+     * red-packet handler, and keeps the enumeration fast.
+     */
+    private static final String[] DEX_SCAN_PREFIXES = {
+            "com.alibaba.android.rimet.",
+            "com.laiwang.",
+            "com.alibaba.android.dingtalkbase.",
     };
 
     private DingTalkDeepHookPlugin() {
@@ -660,18 +677,37 @@ public class DingTalkDeepHookPlugin {
      * name contains a recall/revoke keyword (see {@link #RECALL_METHOD_PATTERNS}) is
      * hooked.  This pattern-based scan automatically adapts when DingTalk renames the
      * method in a future build — no manual update required.</p>
+     *
+     * <p>If none of the named candidates are found (heavily obfuscated builds), a full
+     * DEX-file scan of DingTalk's own packages ({@link #DEX_SCAN_PREFIXES}) is performed
+     * as a fallback, covering any class with a matching method name.</p>
      */
     private static void hookAntiRecall(XposedModule module, ClassLoader classLoader) {
+        boolean anyHooked = false;
         for (String className : RECALL_CLASS_CANDIDATES) {
-            tryHookAntiRecallClass(module, classLoader, className);
+            if (tryHookAntiRecallClass(module, classLoader, className)) {
+                anyHooked = true;
+            }
+        }
+        if (!anyHooked) {
+            module.log(Log.INFO, TAG,
+                    "hookAntiRecall: no named candidates found; starting DEX fallback scan");
+            List<String> allClasses = enumerateDexClassNames(classLoader, DEX_SCAN_PREFIXES);
+            module.log(Log.INFO, TAG,
+                    "hookAntiRecall: DEX scan found " + allClasses.size() + " package candidates");
+            for (String className : allClasses) {
+                tryHookAntiRecallClass(module, classLoader, className);
+            }
         }
     }
 
     /**
      * Scans all declared methods of the given class and hooks every method whose name
      * contains a recall/revoke keyword.  Skips silently if the class is not found.
+     *
+     * @return {@code true} if the class was found and at least one method was hooked.
      */
-    private static void tryHookAntiRecallClass(XposedModule module, ClassLoader classLoader,
+    private static boolean tryHookAntiRecallClass(XposedModule module, ClassLoader classLoader,
             String className) {
         try {
             Class<?> cls = classLoader.loadClass(className);
@@ -699,10 +735,13 @@ public class DingTalkDeepHookPlugin {
             if (hooked) {
                 module.log(Log.INFO, TAG, "hookAntiRecall installed on: " + className);
             }
+            return hooked;
         } catch (ClassNotFoundException e) {
             // Class absent in this DingTalk version — skip silently.
+            return false;
         } catch (Throwable e) {
             module.log(Log.WARN, TAG, "hookAntiRecall error for " + className, e);
+            return false;
         }
     }
 
@@ -722,10 +761,27 @@ public class DingTalkDeepHookPlugin {
      * <p>When enabled the hook calls the "open/grab" action on the HongBao manager
      * immediately after the arrival event fires, simulating the user tapping the
      * red packet envelope.</p>
+     *
+     * <p>If none of the named candidates are found (heavily obfuscated builds), a full
+     * DEX-file scan of DingTalk's own packages ({@link #DEX_SCAN_PREFIXES}) is performed
+     * as a fallback.</p>
      */
     private static void hookRedPacket(XposedModule module, ClassLoader classLoader) {
+        boolean anyHooked = false;
         for (String className : HONGBAO_CLASS_CANDIDATES) {
-            tryHookRedPacketClass(module, classLoader, className);
+            if (tryHookRedPacketClass(module, classLoader, className)) {
+                anyHooked = true;
+            }
+        }
+        if (!anyHooked) {
+            module.log(Log.INFO, TAG,
+                    "hookRedPacket: no named candidates found; starting DEX fallback scan");
+            List<String> allClasses = enumerateDexClassNames(classLoader, DEX_SCAN_PREFIXES);
+            module.log(Log.INFO, TAG,
+                    "hookRedPacket: DEX scan found " + allClasses.size() + " package candidates");
+            for (String className : allClasses) {
+                tryHookRedPacketClass(module, classLoader, className);
+            }
         }
     }
 
@@ -733,8 +789,10 @@ public class DingTalkDeepHookPlugin {
      * Scans all declared methods of the given class and hooks every method that looks
      * like a "new red packet arrived" event callback.  Skips silently if the class is
      * not found.
+     *
+     * @return {@code true} if the class was found and at least one method was hooked.
      */
-    private static void tryHookRedPacketClass(XposedModule module, ClassLoader classLoader,
+    private static boolean tryHookRedPacketClass(XposedModule module, ClassLoader classLoader,
             String className) {
         try {
             Class<?> cls = classLoader.loadClass(className);
@@ -763,10 +821,13 @@ public class DingTalkDeepHookPlugin {
             if (hooked) {
                 module.log(Log.INFO, TAG, "hookRedPacket installed on: " + className);
             }
+            return hooked;
         } catch (ClassNotFoundException e) {
             // Class absent — skip silently.
+            return false;
         } catch (Throwable e) {
             module.log(Log.WARN, TAG, "hookRedPacket error for " + className, e);
+            return false;
         }
     }
 
@@ -856,6 +917,80 @@ public class DingTalkDeepHookPlugin {
     }
 
     // -----------------------------------------------------------------------
+    // DEX class enumeration — fallback for heavily obfuscated DingTalk builds
+    // -----------------------------------------------------------------------
+
+    /**
+     * Enumerates all class names from the DingTalk DEX files whose package starts with
+     * any of the given {@code prefixes}.  Returns an empty list if enumeration fails.
+     *
+     * <p>Implementation: reflects into
+     * {@code BaseDexClassLoader → pathList (DexPathList) → dexElements[] → dexFile (DexFile)}
+     * and calls {@code DexFile.entries()} on each element's backing DEX file.  Works on
+     * API 26–35; falls back gracefully to an empty list if the internal structure has
+     * changed in a future Android release.</p>
+     *
+     * <p>Only class names that start with at least one prefix in {@code prefixes} are
+     * included, which keeps the result set small and avoids touching third-party SDK code.</p>
+     *
+     * @param classLoader the DingTalk process class loader (must be a BaseDexClassLoader).
+     * @param prefixes    package prefixes to include (e.g. {@code "com.alibaba.android.rimet."}).
+     * @return matching class names, possibly empty if enumeration failed or nothing matched.
+     */
+    @SuppressWarnings({"deprecation", "JavaReflectionMemberAccess"})
+    static List<String> enumerateDexClassNames(ClassLoader classLoader, String[] prefixes) {
+        List<String> result = new ArrayList<>();
+        try {
+            // BaseDexClassLoader.pathList → DexPathList
+            Class<?> baseDexCls = Class.forName("dalvik.system.BaseDexClassLoader");
+            Field pathListField = baseDexCls.getDeclaredField("pathList");
+            pathListField.setAccessible(true);
+            Object pathList = pathListField.get(classLoader);
+            if (pathList == null) return result;
+
+            // DexPathList.dexElements → Element[]
+            Class<?> dexPathListCls = Class.forName("dalvik.system.DexPathList");
+            Field dexElementsField = dexPathListCls.getDeclaredField("dexElements");
+            dexElementsField.setAccessible(true);
+            Object[] elements = (Object[]) dexElementsField.get(pathList);
+            if (elements == null) return result;
+
+            for (Object element : elements) {
+                // Element.dexFile → DexFile (null for native-lib elements)
+                Field dexFileField;
+                try {
+                    dexFileField = element.getClass().getDeclaredField("dexFile");
+                } catch (NoSuchFieldException e) {
+                    continue; // Native-library element — skip.
+                }
+                dexFileField.setAccessible(true);
+                Object dexFile = dexFileField.get(element);
+                if (dexFile == null) continue;
+
+                // DexFile.entries() → Enumeration<String> of class names
+                Method entriesMethod = dexFile.getClass().getMethod("entries");
+                @SuppressWarnings("unchecked")
+                Enumeration<String> entries =
+                        (Enumeration<String>) entriesMethod.invoke(dexFile);
+                if (entries == null) continue;
+
+                while (entries.hasMoreElements()) {
+                    String name = entries.nextElement();
+                    for (String prefix : prefixes) {
+                        if (name.startsWith(prefix)) {
+                            result.add(name);
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable e) {
+            // Enumeration unsupported or internal structure changed — return what we have.
+        }
+        return result;
+    }
+
+    // -----------------------------------------------------------------------
     // Adaptation probe — used by the settings UI to display hook status.
     // -----------------------------------------------------------------------
 
@@ -903,13 +1038,33 @@ public class DingTalkDeepHookPlugin {
 
         results.add("");
         results.add("── 消息防撤回 (Anti-Recall) ──");
+        boolean anyRecallFound = false;
         for (String className : RECALL_CLASS_CANDIDATES) {
-            results.add(probeClass(classLoader, className, RECALL_METHOD_PATTERNS,
-                    "recall/revoke"));
+            String line = probeClass(classLoader, className, RECALL_METHOD_PATTERNS,
+                    "recall/revoke");
+            results.add(line);
+            if (line.startsWith("✓") || line.startsWith("△")) anyRecallFound = true;
+        }
+        if (!anyRecallFound) {
+            results.add("△ (已知类名均未找到, 正在使用 DEX 扫描回退...)");
+            List<String> dexClasses = enumerateDexClassNames(classLoader, DEX_SCAN_PREFIXES);
+            int dexHits = 0;
+            for (String className : dexClasses) {
+                String line = probeClass(classLoader, className, RECALL_METHOD_PATTERNS,
+                        "recall/revoke");
+                if (line.startsWith("✓")) {
+                    results.add(line);
+                    dexHits++;
+                }
+            }
+            if (dexHits == 0) {
+                results.add("✗ DEX 扫描: 未找到 revoke/recall 方法 (方法名可能也已混淆)");
+            }
         }
 
         results.add("");
         results.add("── 抢红包 (Red-Packet) ──");
+        boolean anyHbFound = false;
         for (String className : HONGBAO_CLASS_CANDIDATES) {
             List<String> matched = findMatchingMethodNames(classLoader, className,
                     DingTalkDeepHookPlugin::isHongBaoArrivalMethod);
@@ -918,8 +1073,27 @@ public class DingTalkDeepHookPlugin {
                 results.add("✗ " + simpleClass);
             } else if (matched.isEmpty()) {
                 results.add("△ " + simpleClass + " (无匹配方法)");
+                anyHbFound = true;
             } else {
                 results.add("✓ " + simpleClass + ": " + String.join(", ", matched));
+                anyHbFound = true;
+            }
+        }
+        if (!anyHbFound) {
+            results.add("△ (已知类名均未找到, 正在使用 DEX 扫描回退...)");
+            List<String> dexClasses = enumerateDexClassNames(classLoader, DEX_SCAN_PREFIXES);
+            int dexHits = 0;
+            for (String className : dexClasses) {
+                List<String> matched = findMatchingMethodNames(classLoader, className,
+                        DingTalkDeepHookPlugin::isHongBaoArrivalMethod);
+                if (matched != null && !matched.isEmpty()) {
+                    results.add("✓ " + simpleClassName(className)
+                            + ": " + String.join(", ", matched));
+                    dexHits++;
+                }
+            }
+            if (dexHits == 0) {
+                results.add("✗ DEX 扫描: 未找到红包到达方法 (方法名可能也已混淆)");
             }
         }
 

@@ -96,23 +96,45 @@ jobs:
           grep -r "setting_msg_notice" /tmp/jadx-out --include="*.java" | head -20 >> $OUT || true
           echo "" >> $OUT
 
-          echo "### Anti-recall: message revoke / recall classes" >> $OUT
+          echo "### Anti-recall: message revoke / recall classes (by class name)" >> $OUT
           grep -r "class.*[Rr]evoke\|class.*[Rr]ecall\|class ConvMsgService\|class.*ConvMsg" /tmp/jadx-out --include="*.java" -l | \
             sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
           echo "" >> $OUT
 
-          echo "### Anti-recall: onRevokeMsg / revokeMsg methods" >> $OUT
-          grep -rn "void onRevokeMsg\|void revokeMsg\|void.*[Rr]evokeMessage\|void process.*[Rr]evoke" /tmp/jadx-out --include="*.java" | \
-            sed 's|.*/jadx-out/sources/||' | head -20 >> $OUT || true
+          echo "### Anti-recall: classes containing revoke/recall METHOD bodies (obfuscation-robust)" >> $OUT
+          # Find any class (regardless of name) that declares a method with revoke/recall in its body.
+          # This catches obfuscated class names where the method name or string literal reveals intent.
+          grep -rl "revoke\|recall\|withdraw\|retract\|unsend" /tmp/jadx-out --include="*.java" | \
+            grep -i "com/alibaba/android/rimet\|com/laiwang" | \
+            xargs grep -l "void " 2>/dev/null | \
+            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' | head -30 >> $OUT || true
           echo "" >> $OUT
 
-          echo "### Red-packet: HongBao / HB manager classes" >> $OUT
+          echo "### Anti-recall: onRevokeMsg / revokeMsg / recall method declarations" >> $OUT
+          grep -rn "void onRevokeMsg\|void revokeMsg\|void.*[Rr]evokeMessage\|void process.*[Rr]evoke\|void.*[Rr]ecall" /tmp/jadx-out --include="*.java" | \
+            sed 's|.*/jadx-out/sources/||' | head -30 >> $OUT || true
+          echo "" >> $OUT
+
+          echo "### Anti-recall: files with revoke/recall in com.alibaba.android.rimet packages" >> $OUT
+          grep -rln "revoke\|recall" /tmp/jadx-out --include="*.java" | \
+            grep "com/alibaba/android/rimet\|com/laiwang" | \
+            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' | head -30 >> $OUT || true
+          echo "" >> $OUT
+
+          echo "### Red-packet: HongBao / HB manager classes (by class name)" >> $OUT
           grep -r "class.*HongBao\|class.*HongBaoManager\|class.*HbManager\|class.*RedPacket" /tmp/jadx-out --include="*.java" -l | \
             sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' >> $OUT || true
           echo "" >> $OUT
 
+          echo "### Red-packet: classes containing hongbao/redpacket METHOD bodies (obfuscation-robust)" >> $OUT
+          # Find any class (regardless of name) that references hongbao/redpacket strings or method names.
+          grep -rl "hongbao\|HongBao\|redpacket\|RedPacket\|hbmanager\|onReceiveNew\|grabHb\|openHb" /tmp/jadx-out --include="*.java" | \
+            grep -i "com/alibaba/android/rimet\|com/laiwang" | \
+            sed 's|.*/jadx-out/sources/||; s|\.java$||; s|/|.|g' | head -30 >> $OUT || true
+          echo "" >> $OUT
+
           echo "### Red-packet: onReceiveNewHb / onReceiveHongBao / openHongBao methods" >> $OUT
-          grep -rn "onReceiveNewHb\|onReceiveHongBao\|openHongBao\|grabHongBao\|receiveHb\|openHb\|grabHb" /tmp/jadx-out --include="*.java" | \
+          grep -rn "onReceiveNewHb\|onReceiveHongBao\|openHongBao\|grabHongBao\|receiveHb\|openHb\|grabHb\|onNewHb\|pushHb\|newHb" /tmp/jadx-out --include="*.java" | \
             grep -v "^\s*//" | sed 's|.*/jadx-out/sources/||' | head -30 >> $OUT || true
           echo "" >> $OUT
 
