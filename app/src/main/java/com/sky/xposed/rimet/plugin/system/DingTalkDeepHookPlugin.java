@@ -30,8 +30,10 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.libxposed.api.XposedModule;
@@ -939,21 +941,23 @@ public class DingTalkDeepHookPlugin {
      */
     @SuppressWarnings({"deprecation", "JavaReflectionMemberAccess"})
     static List<String> enumerateDexClassNames(ClassLoader classLoader, String[] prefixes) {
-        List<String> result = new ArrayList<>();
+        // Use a LinkedHashSet to deduplicate class names that appear in multiple DEX files
+        // (e.g. when DingTalk loads additional split APKs or feature modules).
+        Set<String> seen = new LinkedHashSet<>();
         try {
             // BaseDexClassLoader.pathList → DexPathList
             Class<?> baseDexCls = Class.forName("dalvik.system.BaseDexClassLoader");
             Field pathListField = baseDexCls.getDeclaredField("pathList");
             pathListField.setAccessible(true);
             Object pathList = pathListField.get(classLoader);
-            if (pathList == null) return result;
+            if (pathList == null) return new ArrayList<>(seen);
 
             // DexPathList.dexElements → Element[]
             Class<?> dexPathListCls = Class.forName("dalvik.system.DexPathList");
             Field dexElementsField = dexPathListCls.getDeclaredField("dexElements");
             dexElementsField.setAccessible(true);
             Object[] elements = (Object[]) dexElementsField.get(pathList);
-            if (elements == null) return result;
+            if (elements == null) return new ArrayList<>(seen);
 
             for (Object element : elements) {
                 // Element.dexFile → DexFile (null for native-lib elements)
@@ -978,7 +982,7 @@ public class DingTalkDeepHookPlugin {
                     String name = entries.nextElement();
                     for (String prefix : prefixes) {
                         if (name.startsWith(prefix)) {
-                            result.add(name);
+                            seen.add(name);
                             break;
                         }
                     }
@@ -987,7 +991,7 @@ public class DingTalkDeepHookPlugin {
         } catch (Throwable e) {
             // Enumeration unsupported or internal structure changed — return what we have.
         }
-        return result;
+        return new ArrayList<>(seen);
     }
 
     // -----------------------------------------------------------------------
@@ -1073,7 +1077,6 @@ public class DingTalkDeepHookPlugin {
                 results.add("✗ " + simpleClass);
             } else if (matched.isEmpty()) {
                 results.add("△ " + simpleClass + " (无匹配方法)");
-                anyHbFound = true;
             } else {
                 results.add("✓ " + simpleClass + ": " + String.join(", ", matched));
                 anyHbFound = true;
